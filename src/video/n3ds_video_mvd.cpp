@@ -41,6 +41,13 @@
 
 static std::unique_ptr<MvdDecoder> instance = nullptr;
 
+// The MVD service is initialized once per process and never shut down (see
+// the destructor). Track the frame size its work buffer was sized for so a
+// later, larger stream can at least be warned about.
+static bool mvd_service_initialized = false;
+static int mvd_service_width = 0;
+static int mvd_service_height = 0;
+
 MvdDecoder::MvdDecoder(int videoFormat, int width, int height, int redrawRate,
                        void *context, int drFlags)
     : VideoDecoderBase(width, height) {
@@ -51,32 +58,44 @@ MvdDecoder::MvdDecoder(int videoFormat, int width, int height, int redrawRate,
         throw std::runtime_error("Unsupported hardware");
     }
 
-    // Calculate required buffer size
-    MVDSTD_CalculateWorkBufSizeConfig config = {
-        0,
-    };
-    config.level.enable = true;
-    config.level.flag = (MVD_CALC_WITH_LEVEL_FLAG_ENABLE_CALC |
-                         MVD_CALC_WITH_LEVEL_FLAG_ENABLE_EXTRA_OP |
-                         MVD_CALC_WITH_LEVEL_FLAG_UNK);
-    config.level.level = MVD_H264_LEVEL_4_2;
-    config.width = width;
-    config.height = height;
-    uint32_t size = 0;
-    int status = mvdstdCalculateBufferSize(&config, &size);
-    if (status) {
-        fprintf(stderr, "mvdstdCalculateBufferSize failed: %d\n", status);
-        throw std::runtime_error("mvdstdCalculateBufferSize failed");
+    int status = 0;
+    if (!mvd_service_initialized) {
+        // Calculate required buffer size
+        MVDSTD_CalculateWorkBufSizeConfig config = {
+            0,
+        };
+        config.level.enable = true;
+        config.level.flag = (MVD_CALC_WITH_LEVEL_FLAG_ENABLE_CALC |
+                             MVD_CALC_WITH_LEVEL_FLAG_ENABLE_EXTRA_OP |
+                             MVD_CALC_WITH_LEVEL_FLAG_UNK);
+        config.level.level = MVD_H264_LEVEL_4_2;
+        config.width = width;
+        config.height = height;
+        uint32_t size = 0;
+        status = mvdstdCalculateBufferSize(&config, &size);
+        if (status) {
+            fprintf(stderr, "mvdstdCalculateBufferSize failed: %d\n", status);
+            throw std::runtime_error("mvdstdCalculateBufferSize failed");
+        }
+
+        status = mvdstdInit(MVDMODE_VIDEOPROCESSING, MVD_INPUT_H264,
+                            MVD_OUTPUT_BGR565, size, NULL);
+        if (status) {
+            fprintf(stderr, "mvdstdInit failed: %d\n", status);
+            mvdstdExit();
+            throw std::runtime_error("mvdstdInit failed");
+        }
+        mvd_service_initialized = true;
+        mvd_service_width = width;
+        mvd_service_height = height;
+    } else if (width > mvd_service_width || height > mvd_service_height) {
+        fprintf(stderr,
+                "Warning: MVD work buffer was sized for %dx%d; %dx%d may fail "
+                "to decode. Restart the app to use the new resolution.\n",
+                mvd_service_width, mvd_service_height, width, height);
     }
 
     first_frame = true;
-    status = mvdstdInit(MVDMODE_VIDEOPROCESSING, MVD_INPUT_H264,
-                        MVD_OUTPUT_BGR565, size, NULL);
-    if (status) {
-        fprintf(stderr, "mvdstdInit failed: %d\n", status);
-        mvdstdExit();
-        throw std::runtime_error("mvdstdInit failed");
-    }
 
     rgb_img_buffer = (u8 *)linearAlloc(MOON_CTR_VIDEO_TEX_W *
                                        MOON_CTR_VIDEO_TEX_H * pixel_size);
@@ -147,7 +166,10 @@ MvdDecoder::~MvdDecoder() {
         threadFree(decode_thread);
         decode_thread = NULL;
     }
-    mvdstdExit();
+    // Do not call mvdstdExit() here. On affected New 2DS XL hardware the
+    // libctru shutdown path can remain BUSY for roughly a minute, which is
+    // the "stuck on Exiting stream..." hang (upstream issue #116). The
+    // service and its work buffer are kept alive until the process exits.
     for (int i = 0; i < MVD_FRAME_QUEUE_DEPTH; i++) {
         linearFree(frame_slots[i].buf);
     }
