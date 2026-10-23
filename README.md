@@ -35,6 +35,12 @@ After modding your 3DS and installing the Moonlight CIA, open the moonlight appl
 You can modify documented settings either in the app, or by creating/modifying the config file located at `sd:/3ds/moonlight/moonlight.conf`.
 The default settings are recommended for \*New\* 3DS users.
 
+### Performance tips (New 3DS)
+
+- For single-screen gaming, set `height` to `240` (keep `width` at `800`). The top screen is 800x240 in wide mode, so an 800x480 stream is only ever downscaled; 800x240 halves the decoder's work and the bitrate needed for the same picture. Use 480 if you rely on the dual-screen views.
+- Hardware decoding and presentation run on their own thread (core 2), so the network/FEC thread is never blocked by the decoder. Open the debug view from the in-stream menu to see per-frame decode (red) and present (blue) time on the top scanline; the green marks are the 16.7ms frame target.
+- Keep the 3DS close to the router and prefer a 2.4GHz network with little congestion; the 3DS has no 5GHz radio.
+
 ## Documentation
 
 More information about installing and runnning Moonlight Embedded is available on the [wiki](https://github.com/moonlight-stream/moonlight-embedded/wiki).

@@ -44,6 +44,10 @@ static int n3ds_renderer_init(int audioConfiguration,
     decoder = opus_multistream_decoder_create(
         opusConfig->sampleRate, opusConfig->channelCount, opusConfig->streams,
         opusConfig->coupledStreams, opusConfig->mapping, &rc);
+    if (rc != OPUS_OK || decoder == NULL) {
+        fprintf(stderr, "opus_multistream_decoder_create failed: %d\n", rc);
+        return -1;
+    }
 
     sampleRate = opusConfig->sampleRate;
     channelCount = opusConfig->channelCount;
@@ -55,7 +59,9 @@ static int n3ds_renderer_init(int audioConfiguration,
         return -1;
     }
 
-    u8 *audioBuffer = (u8 *)linearAlloc(bytes_per_frame * WAVEBUF_SIZE);
+    // Assign the file-scope buffer (a local here would shadow it and leak
+    // the linear allocation on every stream)
+    audioBuffer = (u8 *)linearAlloc(bytes_per_frame * WAVEBUF_SIZE);
     if (audioBuffer == NULL)
         return -1;
     memset(audioBuffer, 0, bytes_per_frame * WAVEBUF_SIZE);
@@ -92,7 +98,7 @@ static void n3ds_renderer_cleanup() {
     ndspChnWaveBufClear(0);
     ndspExit();
     if (audioBuffer != NULL) {
-        free(audioBuffer);
+        linearFree(audioBuffer);
         audioBuffer = NULL;
     }
     printf("Audio renderer shutdown successfully\n");

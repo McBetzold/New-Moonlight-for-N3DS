@@ -85,6 +85,18 @@ class SoftVideoDecoder : public VideoDecoderBase {
     u8 *rgb_img_buffer;
 };
 
+// Number of complete frames that can be queued between the network receive
+// thread and the MVD decode thread. Must be small to keep latency down, since
+// no frame is ever dropped (a dropped P-frame would corrupt every frame after
+// it until the next IDR).
+#define MVD_FRAME_QUEUE_DEPTH 3
+
+struct MvdFrameSlot {
+    void *buf = NULL;
+    size_t buf_size = 0;
+    int length = 0;
+};
+
 class MvdDecoder : public VideoDecoderBase {
   public:
     MvdDecoder(int videoFormat, int width, int height, int redrawRate,
@@ -94,13 +106,23 @@ class MvdDecoder : public VideoDecoderBase {
 
   private:
     DecodeReturnStatus _decode(unsigned char *indata, int inlen);
+    void _decode_loop();
+    static void _decode_thread_entry(void *arg);
 
   private:
-    void *nal_unit_buffer = NULL;
-    size_t nal_unit_buffer_size = 0;
     MVDSTD_Config mvdstd_config;
     u8 *rgb_img_buffer;
     bool first_frame = true;
+
+    // Frame queue: filled by submit_decode_unit() on the receive thread,
+    // drained by the decode thread.
+    MvdFrameSlot frame_slots[MVD_FRAME_QUEUE_DEPTH];
+    int write_idx = 0;
+    int read_idx = 0;
+    LightSemaphore free_slots;
+    LightSemaphore filled_slots;
+    Thread decode_thread = NULL;
+    volatile bool stop_decoding = false;
 };
 
 extern DECODER_RENDERER_CALLBACKS decoder_callbacks_n3ds;
