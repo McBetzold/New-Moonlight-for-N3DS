@@ -16,6 +16,7 @@
  */
 
 #include "ui_gfx.hpp"
+#include "vshader_shbin.h"
 
 #include <algorithm>
 #include <cmath>
@@ -24,6 +25,10 @@
 namespace ui {
 
 static bool g_ready = false;
+// See gfx_init(): a throwaway program used to force citro2d's shader to be
+// re-uploaded after a C3D_Fini/C3D_Init cycle.
+static DVLB_s *g_scratch_dvlb = nullptr;
+static shaderProgram_s g_scratch_program;
 static C3D_RenderTarget *g_top = nullptr;
 static C3D_RenderTarget *g_bottom = nullptr;
 static C2D_TextBuf g_text_buf = nullptr;
@@ -57,6 +62,25 @@ bool gfx_init() {
     if (!C3D_Init(C3D_DEFAULT_CMDBUF_SIZE)) {
         return false;
     }
+
+    // C3D_Init clears the "program dirty" flag but keeps the pointer of the
+    // program that was bound before C3D_Fini. citro2d binds the same static
+    // program object again, so without this the shader is never re-sent and
+    // the GPU keeps running the video renderer's vertex shader after a
+    // stream. Binding a different (valid) program first makes citro2d's
+    // rebind count as a change.
+    if (!g_scratch_dvlb) {
+        g_scratch_dvlb =
+            DVLB_ParseFile((u32 *)vshader_shbin, vshader_shbin_size);
+        if (g_scratch_dvlb) {
+            shaderProgramInit(&g_scratch_program);
+            shaderProgramSetVsh(&g_scratch_program, &g_scratch_dvlb->DVLE[0]);
+        }
+    }
+    if (g_scratch_dvlb) {
+        C3D_BindProgram(&g_scratch_program);
+    }
+
     if (!C2D_Init(C2D_DEFAULT_MAX_OBJECTS)) {
         C3D_Fini();
         return false;
