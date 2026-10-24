@@ -304,10 +304,13 @@ bool texture_upload(Texture &t, const std::vector<u8> &tiled) {
 
     t.sub.width = IMG_W;
     t.sub.height = IMG_H;
+    // pack_tiled() already stores the image bottom-up, so sample it with
+    // top=0/bottom=1; using the tex3ds convention (top=1) on top of that
+    // flipped the art upside down on hardware.
     t.sub.left = 0.0f;
-    t.sub.top = 1.0f;
+    t.sub.top = 0.0f;
     t.sub.right = (float)IMG_W / (float)TEX_W;
-    t.sub.bottom = 1.0f - (float)IMG_H / (float)TEX_H;
+    t.sub.bottom = (float)IMG_H / (float)TEX_H;
     t.valid = true;
     return true;
 }
