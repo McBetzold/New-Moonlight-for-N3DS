@@ -21,6 +21,7 @@
 #include "vshader_shbin.h"
 
 #include <3ds.h>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <stdbool.h>
@@ -78,14 +79,30 @@ inline void N3dsRendererBase::write24(u8 *p, u32 val) {
     p[2] = val >> 16;
 }
 
+inline void N3dsRendererBase::draw_perf_px(u8 *dest, u32 idx, u8 r, u8 g,
+                                           u8 b) {
+    if (px_size == 2) {
+        // RGB565: the screens are initialized with GSP_RGB565_OES
+        u16 c = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+        memcpy(dest + idx * 2, &c, 2);
+    } else {
+        // BGR8: stored as b, g, r
+        u8 *p = dest + idx * px_size;
+        p[0] = b;
+        p[1] = g;
+        p[2] = r;
+    }
+}
+
 inline void N3dsRendererBase::draw_perf_counters() {
     u8 *dest = gfxGetFramebuffer(screen, GFX_LEFT, NULL, NULL);
 
-    // Use a line going across the first scanline (left) for the perf counters.
-    // Clear to black
-    memset(dest, 0, GSP_SCREEN_WIDTH * 3);
+    // The framebuffer is column-major, so the first GSP_SCREEN_WIDTH (240)
+    // pixels in memory form the leftmost column of the screen, bottom to top.
+    // Clear it to black.
+    memset(dest, 0, GSP_SCREEN_WIDTH * px_size);
 
-    // Display frame target in the middle of the screen.
+    // Scale so the frame target lands at the middle of the column.
     double perf_tick_divisor =
         ((double)GSP_SCREEN_WIDTH) / ((double)(perf_frame_target_ticks * 2));
     u32 perf_px = 0;
@@ -94,20 +111,62 @@ inline void N3dsRendererBase::draw_perf_counters() {
 #define PERF_DRAW(ticks, r, g, b)                                              \
     perf_tmp_height = perf_tick_divisor * ((double)(ticks));                   \
     do {                                                                       \
-        if (perf_px > GSP_SCREEN_WIDTH)                                        \
+        if (perf_px >= GSP_SCREEN_WIDTH)                                       \
             break;                                                             \
-        const u32 color = (r << 16) | (g << 8) | b;                            \
-        memcpy(dest + (perf_px * 3), &color, 3);                               \
+        draw_perf_px(dest, perf_px, r, g, b);                                  \
         perf_px++;                                                             \
     } while (perf_tmp_height-- > 0);
 
     PERF_DRAW(perf_decode_ticks, 255, 0, 0);
     PERF_DRAW(perf_fbcopy_ticks, 0, 0, 255);
 
-    // Draw two green pixels at the center
+    // Two green pixels mark the frame target
     perf_px = (GSP_SCREEN_WIDTH / 2) - 1;
     PERF_DRAW(0, 0, 255, 0);
     PERF_DRAW(0, 0, 255, 0);
+
+#undef PERF_DRAW
+
+    // The framebuffer lives in cached linear memory; make the CPU writes
+    // visible to the LCD.
+    GSPGPU_FlushDataCache(dest, GSP_SCREEN_WIDTH * px_size);
+}
+
+// Print a once-per-second summary of the per-frame timings so they can be
+// read off the debug console instead of estimated from the bar.
+inline void N3dsRendererBase::log_perf_counters() {
+    perf_log_frames++;
+    perf_log_decode_sum += perf_decode_ticks;
+    perf_log_fbcopy_sum += perf_fbcopy_ticks;
+    if (perf_decode_ticks > perf_log_decode_max)
+        perf_log_decode_max = perf_decode_ticks;
+    if (perf_fbcopy_ticks > perf_log_fbcopy_max)
+        perf_log_fbcopy_max = perf_fbcopy_ticks;
+
+    u64 now = svcGetSystemTick();
+    if (perf_log_last_ticks == 0) {
+        perf_log_last_ticks = now;
+        return;
+    }
+    if (now - perf_log_last_ticks < SYSCLOCK_ARM11) {
+        return;
+    }
+
+    const double ms_per_tick = 1000.0 / (double)SYSCLOCK_ARM11;
+    double elapsed_s =
+        (double)(now - perf_log_last_ticks) / (double)SYSCLOCK_ARM11;
+    printf("perf: %.0f fps | decode avg %.1f max %.1f ms | present avg %.1f "
+           "max %.1f ms\n",
+           perf_log_frames / elapsed_s,
+           (perf_log_decode_sum / (double)perf_log_frames) * ms_per_tick,
+           perf_log_decode_max * ms_per_tick,
+           (perf_log_fbcopy_sum / (double)perf_log_frames) * ms_per_tick,
+           perf_log_fbcopy_max * ms_per_tick);
+
+    perf_log_last_ticks = now;
+    perf_log_frames = 0;
+    perf_log_decode_sum = perf_log_decode_max = 0;
+    perf_log_fbcopy_sum = perf_log_fbcopy_max = 0;
 }
 
 void N3dsRendererBase::write_px_to_framebuffer_gpu(uint8_t *__restrict source) {
@@ -373,6 +432,7 @@ void N3dsRendererBase::write_px_to_framebuffer_gpu(uint8_t *__restrict source) {
     perf_fbcopy_ticks = svcGetSystemTick() - start_ticks;
     if (debug) {
         draw_perf_counters();
+        log_perf_counters();
     }
 
     gfxScreenSwapBuffers(screen, true);

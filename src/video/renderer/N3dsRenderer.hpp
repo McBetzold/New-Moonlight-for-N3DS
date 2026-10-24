@@ -48,6 +48,8 @@ class N3dsRendererBase {
 
   protected:
     inline void draw_perf_counters();
+    inline void draw_perf_px(u8 *dest, u32 idx, u8 r, u8 g, u8 b);
+    inline void log_perf_counters();
     void write_px_to_framebuffer_gpu(uint8_t *__restrict source);
     void ensure_3d_enabled();
     void ensure_3d_disabled();
@@ -59,6 +61,15 @@ class N3dsRendererBase {
     u64 perf_fbcopy_ticks;
 
   protected:
+    // Accumulators for the once-per-second summary printed to the debug
+    // console
+    u64 perf_log_last_ticks = 0;
+    u32 perf_log_frames = 0;
+    u64 perf_log_decode_sum = 0;
+    u64 perf_log_decode_max = 0;
+    u64 perf_log_fbcopy_sum = 0;
+    u64 perf_log_fbcopy_max = 0;
+
     gfxScreen_t screen;
     int surface_width;
     int surface_height;
