@@ -44,6 +44,7 @@ typedef struct _SERVER_DATA {
   SERVER_INFORMATION serverInfo;
   unsigned short httpPort;
   unsigned short httpsPort;
+  char* hostname; /* optional, NULL when the server does not report one */
 } SERVER_DATA, *PSERVER_DATA;
 
 int gs_init(PSERVER_DATA server, char* address, unsigned short httpPort, const char *keyDirectory, int logLevel, bool unsupported);
@@ -53,6 +54,9 @@ int gs_applist(PSERVER_DATA server, PAPP_LIST *app_list);
 int gs_unpair(PSERVER_DATA server);
 int gs_pair(PSERVER_DATA server, char* pin);
 int gs_quit_app(PSERVER_DATA server);
+/* Downloads the box art image for an app. On success *out_data is a malloc'd
+ * buffer of *out_size bytes that the caller must free(). */
+int gs_download_boxart(PSERVER_DATA server, int appId, char **out_data, size_t *out_size);
 
 #ifdef __cplusplus
 }

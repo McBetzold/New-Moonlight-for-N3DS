@@ -231,6 +231,13 @@ static int load_serverinfo(PSERVER_DATA server, bool https) {
   if (xml_modelist(data->memory, data->size, &server->modes) != GS_OK)
     goto cleanup;
 
+  // Optional: Sunshine and GFE report the machine name here
+  {
+    char *hostnameText = NULL;
+    if (xml_search(data->memory, data->size, "hostname", &hostnameText) == GS_OK)
+      server->hostname = hostnameText;
+  }
+
   // These fields are present on all version of GFE that this client supports
   if (!strlen(currentGameText) || !strlen(pairedText) || !strlen(server->serverInfo.serverInfoAppVersion) || !strlen(stateText))
     goto cleanup;
@@ -696,6 +703,32 @@ int gs_applist(PSERVER_DATA server, PAPP_LIST *list) {
     ret = GS_ERROR;
   else if (xml_applist(data->memory, data->size, list) != GS_OK)
     ret = GS_INVALID;
+
+  http_free_data(data);
+  return ret;
+}
+
+int gs_download_boxart(PSERVER_DATA server, int appId, char **out_data, size_t *out_size) {
+  int ret = GS_OK;
+  char url[4096];
+  uuid_t uuid;
+  char uuid_str[UUID_STRLEN];
+  PHTTP_DATA data = http_create_data();
+  if (data == NULL)
+    return GS_OUT_OF_MEMORY;
+
+  uuid_generate_random(uuid);
+  uuid_unparse(uuid, uuid_str);
+  snprintf(url, sizeof(url), "https://%s:%u/appasset?uniqueid=%s&uuid=%s&appid=%d&AssetType=2&AssetIdType=0", server->serverInfo.address, server->httpsPort, unique_id, uuid_str, appId);
+  if (http_request(url, data) != GS_OK) {
+    ret = GS_IO_ERROR;
+  } else if (data->size == 0) {
+    ret = GS_INVALID;
+  } else {
+    *out_data = data->memory;
+    *out_size = data->size;
+    data->memory = NULL;
+  }
 
   http_free_data(data);
   return ret;
