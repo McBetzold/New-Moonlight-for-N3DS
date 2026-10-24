@@ -154,13 +154,25 @@ void MoonlightUi::run_stream(const std::shared_ptr<HostEntry> &host,
     // let go of the GPU by then.
     listener->arm_ui_handshake(STAGE_VIDEO_STREAM_START);
 
+    // moonlight-common-c creates its threads with the priority of the thread
+    // calling LiStartConnection. The worker runs slightly below the UI
+    // thread, which starved the control/async-callback threads; run the
+    // connection setup at the main thread's priority instead.
+    s32 main_priority = 0x30;
+    svcGetThreadPriority(&main_priority, CUR_THREAD_HANDLE);
+
     auto status = std::make_shared<int>(0);
     auto job = Worker::instance().post([host, cfg, video_callbacks,
-                                        audio_callbacks, status] {
+                                        audio_callbacks, status,
+                                        main_priority] {
+        s32 old_priority = main_priority;
+        svcGetThreadPriority(&old_priority, CUR_THREAD_HANDLE);
+        svcSetThreadPriority(CUR_THREAD_HANDLE, main_priority);
         *status = LiStartConnection(&host->server.serverInfo, &cfg->stream,
                                     &n3ds_connection_callbacks, video_callbacks,
                                     audio_callbacks, NULL, DISPLAY_FULLSCREEN,
                                     cfg->audio_device, 0);
+        svcSetThreadPriority(CUR_THREAD_HANDLE, old_priority);
     });
 
     Modal m;
