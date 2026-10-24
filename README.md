@@ -37,7 +37,7 @@ The default settings are recommended for \*New\* 3DS users.
 
 ### Performance tips (New 3DS)
 
-- For single-screen gaming, set `height` to `240` (keep `width` at `800`). The top screen is 800x240 in wide mode, so an 800x480 stream is only ever downscaled; 800x240 halves the decoder's work and the bitrate needed for the same picture. Use 480 if you rely on the dual-screen views.
+- 800x480 at 60fps is comfortably within the New 3DS's budget (about 6.5ms decode and 3ms present per 16.7ms frame), so there is normally no need to go lower. 800x240 (the top screen's native wide-mode size) halves the decoder's work, but only looks right if the host *scales* a 5:3 picture down to it; hosts that switch their display to the requested mode (Apollo's virtual display, Sunshine with display-mode changes on) will render an 800x240 desktop that appears stretched 2x vertically. On Apollo, add a display mode remap `800x240 -> 1280x768` before using it.
 - Hardware decoding and presentation run on their own thread (core 2), so the network/FEC thread is never blocked by the decoder. Open the debug view from the in-stream menu: the bottom screen shows a status panel (fps, stream size, network RTT, decode and present times) above a scrolling log, and the leftmost column of the top screen shows per-frame decode (red) and present (blue) time with green marks at the 16.7ms frame target.
 - Keep the 3DS close to the router and prefer a 2.4GHz network with little congestion; the 3DS has no 5GHz radio.
 
