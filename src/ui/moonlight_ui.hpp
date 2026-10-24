@@ -188,6 +188,11 @@ class MoonlightUi {
     int pcs_hit(float tx, float ty) const;
     std::vector<ToolButton> pcs_toolbar() const;
     void add_pc();
+    void add_pc_manual();
+    void discover_pcs();
+    // Probes a freshly created entry, offers "add anyway" when offline, adds
+    // it to the list and offers pairing.
+    void add_host_entry(const std::shared_ptr<HostEntry> &host);
     void pc_options();
     void connect_to(const std::shared_ptr<HostEntry> &host);
     void pair_host(const std::shared_ptr<HostEntry> &host);
