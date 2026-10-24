@@ -110,13 +110,31 @@ void DebugConsole::set_stats(const char *fmt, ...) {
 }
 
 void DebugConsole::vlog(const char *fmt, va_list args) {
+    // Collapse runs of identical messages (moonlight-common-c can emit the
+    // same warning hundreds of times a second) so they don't bury the rest.
+    static char last_line[256];
+    static unsigned repeat_count = 0;
+    char line[256];
+    vsnprintf(line, sizeof(line), fmt, args);
+
     console_lock.lock();
     if (is_active) {
         PrintConsole *prev = consoleSelect(&log_console);
-        vprintf(fmt, args);
+        if (strcmp(line, last_line) == 0) {
+            repeat_count++;
+        } else {
+            if (repeat_count > 0) {
+                printf("  (last message repeated %u more times)\n",
+                       repeat_count);
+            }
+            repeat_count = 0;
+            strncpy(last_line, line, sizeof(last_line) - 1);
+            last_line[sizeof(last_line) - 1] = '\0';
+            fputs(line, stdout);
+        }
         consoleSelect(prev);
     } else {
-        vprintf(fmt, args);
+        fputs(line, stdout);
     }
     console_lock.unlock();
 }

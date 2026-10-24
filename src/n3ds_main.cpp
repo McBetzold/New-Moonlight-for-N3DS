@@ -547,7 +547,7 @@ static void action_stream(CONFIGURATION *config, SERVER_DATA *server) {
         input_handler = std::make_shared<N3dsInput>(
             config->stream.width, config->stream.height,
             config->swap_face_buttons, config->swap_triggers_and_shoulders,
-            config->use_triggers_for_mouse);
+            config->use_triggers_for_mouse, config->motion_controls);
     }
     stream(server, config, appId, input_handler);
 }

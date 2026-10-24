@@ -27,7 +27,8 @@
 class N3dsInput : public ISubscriber {
   public:
     N3dsInput(int image_width, int image_height, bool swap_face_buttons,
-              bool swap_triggers_and_shoulders, bool use_triggers_for_mouse_in);
+              bool swap_triggers_and_shoulders, bool use_triggers_for_mouse_in,
+              bool motion_controls_in = false);
     ~N3dsInput();
     void accept(IMessage *msg) override;
     void n3dsinput_handle_event();
@@ -52,6 +53,7 @@ class N3dsInput : public ISubscriber {
     AtomicVar<bool> enable_gyro = false;
     AtomicVar<bool> enable_accel = false;
     bool use_triggers_for_mouse = false;
+    bool motion_controls = false;
     bool menu_active = false;
 
     uint32_t CUSTOM_KEY_A;

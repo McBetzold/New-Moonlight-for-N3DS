@@ -44,11 +44,12 @@
 
 N3dsInput::N3dsInput(int image_width, int image_height, bool swap_face_buttons,
                      bool swap_triggers_and_shoulders,
-                     bool use_triggers_for_mouse_in) {
+                     bool use_triggers_for_mouse_in, bool motion_controls_in) {
     hidInit();
     HIDUSER_GetGyroscopeRawToDpsCoefficient(&gyro_coeff);
-    _add_gamepad();
     use_triggers_for_mouse = use_triggers_for_mouse_in;
+    motion_controls = motion_controls_in;
+    _add_gamepad();
 
     // Ternary setup is less efficient, but more readable.
     // We can afford the minor performance cost here.
@@ -93,7 +94,12 @@ void N3dsInput::accept(IMessage *msg) {
 }
 
 void N3dsInput::_add_gamepad() {
-    unsigned short capabilities = LI_CCAP_ACCEL | LI_CCAP_GYRO;
+    // Only advertise motion sensors when motion controls are enabled;
+    // otherwise the host keeps asking for motion reports the client will
+    // never send, and those requests pile up in moonlight-common-c's async
+    // callback queue ("Failed to queue async callback").
+    unsigned short capabilities =
+        motion_controls ? (LI_CCAP_ACCEL | LI_CCAP_GYRO) : 0;
     unsigned char type = LI_CTYPE_NINTENDO;
     LiSendControllerArrivalEvent(CONTROLLER_NUMBER, ACTIVE_GAMEPAD_MASK, type,
                                  SUPPORTED_BUTTONS, capabilities);
