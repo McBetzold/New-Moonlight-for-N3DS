@@ -18,6 +18,7 @@
  */
 
 #include "TouchHandler.hpp"
+#include "../../system/debug_console.hpp"
 #include <Limelight.h>
 #include <cstdio>
 #include <cstring>
@@ -26,13 +27,15 @@ PrintConsole DebugTouchHandler::topScreen;
 PrintConsole DebugTouchHandler::bottomScreen;
 
 DebugTouchHandler::DebugTouchHandler() {
-    consoleSelect(&bottomScreen);
+    // Status panel on top, scrolling log underneath; stderr goes there too
+    DebugConsole::enter();
     consoleDebugInit(debugDevice_CONSOLE);
-    printf("Debug Logs will now appear on the bottom screen\n");
+    DebugConsole::log("Debug view: stats above, logs below\n");
 }
 
 DebugTouchHandler::~DebugTouchHandler() {
     consoleDebugInit(debugDevice_NULL);
+    DebugConsole::leave();
     consoleSelect(&topScreen);
 }
 

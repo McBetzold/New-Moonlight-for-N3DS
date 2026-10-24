@@ -18,6 +18,7 @@
  */
 
 #include "N3dsRenderer.hpp"
+#include "../../system/debug_console.hpp"
 #include "vshader_shbin.h"
 
 #include <3ds.h>
@@ -132,8 +133,8 @@ inline void N3dsRendererBase::draw_perf_counters() {
     GSPGPU_FlushDataCache(dest, GSP_SCREEN_WIDTH * px_size);
 }
 
-// Print a once-per-second summary of the per-frame timings so they can be
-// read off the debug console instead of estimated from the bar.
+// Refresh the debug view's status panel once per second with the presented
+// frame rate, the per-frame timings and the estimated network round trip.
 inline void N3dsRendererBase::log_perf_counters() {
     perf_log_frames++;
     perf_log_decode_sum += perf_decode_ticks;
@@ -155,13 +156,23 @@ inline void N3dsRendererBase::log_perf_counters() {
     const double ms_per_tick = 1000.0 / (double)SYSCLOCK_ARM11;
     double elapsed_s =
         (double)(now - perf_log_last_ticks) / (double)SYSCLOCK_ARM11;
-    printf("perf: %.0f fps | decode avg %.1f max %.1f ms | present avg %.1f "
-           "max %.1f ms\n",
-           perf_log_frames / elapsed_s,
-           (perf_log_decode_sum / (double)perf_log_frames) * ms_per_tick,
-           perf_log_decode_max * ms_per_tick,
-           (perf_log_fbcopy_sum / (double)perf_log_frames) * ms_per_tick,
-           perf_log_fbcopy_max * ms_per_tick);
+    uint32_t rtt_ms = 0, rtt_var_ms = 0;
+    char rtt_str[24];
+    if (LiGetEstimatedRttInfo(&rtt_ms, &rtt_var_ms)) {
+        snprintf(rtt_str, sizeof(rtt_str), "%lu ms (var %lu)",
+                 (unsigned long)rtt_ms, (unsigned long)rtt_var_ms);
+    } else {
+        snprintf(rtt_str, sizeof(rtt_str), "n/a");
+    }
+    DebugConsole::set_stats(
+        "%.0f fps  %dx%d  rtt %s\n"
+        "decode  avg %5.1f  max %5.1f ms\n"
+        "present avg %5.1f  max %5.1f ms",
+        perf_log_frames / elapsed_s, image_width, image_height, rtt_str,
+        (perf_log_decode_sum / (double)perf_log_frames) * ms_per_tick,
+        perf_log_decode_max * ms_per_tick,
+        (perf_log_fbcopy_sum / (double)perf_log_frames) * ms_per_tick,
+        perf_log_fbcopy_max * ms_per_tick);
 
     perf_log_last_ticks = now;
     perf_log_frames = 0;

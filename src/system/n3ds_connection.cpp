@@ -19,6 +19,7 @@
 
 #include "n3ds_connection.hpp"
 #include "../input/n3ds_input.hpp"
+#include "../system/debug_console.hpp"
 #include "../system/dispatcher.hpp"
 
 #include <3ds.h>
@@ -69,7 +70,8 @@ void N3dsConnectionListener::connection_log_message(const char *format,
     if (!debug.load()) {
         return;
     }
-    vprintf(format, arglist);
+    // Goes to the scrolling log region of the debug view
+    DebugConsole::vlog(format, arglist);
 }
 
 void N3dsConnectionListener::connection_status_update(int status) {

@@ -38,7 +38,7 @@ The default settings are recommended for \*New\* 3DS users.
 ### Performance tips (New 3DS)
 
 - For single-screen gaming, set `height` to `240` (keep `width` at `800`). The top screen is 800x240 in wide mode, so an 800x480 stream is only ever downscaled; 800x240 halves the decoder's work and the bitrate needed for the same picture. Use 480 if you rely on the dual-screen views.
-- Hardware decoding and presentation run on their own thread (core 2), so the network/FEC thread is never blocked by the decoder. Open the debug view from the in-stream menu to see per-frame decode (red) and present (blue) time on the top scanline; the green marks are the 16.7ms frame target.
+- Hardware decoding and presentation run on their own thread (core 2), so the network/FEC thread is never blocked by the decoder. Open the debug view from the in-stream menu: the bottom screen shows a status panel (fps, stream size, network RTT, decode and present times) above a scrolling log, and the leftmost column of the top screen shows per-frame decode (red) and present (blue) time with green marks at the 16.7ms frame target.
 - Keep the 3DS close to the router and prefer a 2.4GHz network with little congestion; the 3DS has no 5GHz radio.
 
 ## Documentation
