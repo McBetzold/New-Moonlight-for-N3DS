@@ -24,6 +24,7 @@
 #include "../system/n3ds_connection.hpp"
 
 #include <3ds.h>
+#include <Limelight.h>
 
 namespace stream_session {
 
@@ -50,15 +51,19 @@ static void input_loop(void *input_handler_in) {
 
 void run_loop(PCONFIGURATION config, N3dsConnectionListener *listener,
               std::shared_ptr<N3dsInput> input_handler) {
-    // Spin off worker threads
+    // Spin off worker threads. They are joined below: both keep raw pointers
+    // to the listener and the input handler, which the caller destroys as
+    // soon as this function returns.
     size_t stack_size = 0x20000;
     s32 priority = 0x30;
     svcGetThreadPriority(&priority, CUR_THREAD_HANDLE);
+    Thread input_thread = nullptr;
     if (!config->viewonly && input_handler != nullptr) {
-        threadCreate(input_loop, input_handler.get(), stack_size, priority, -1,
-                     true);
+        input_thread = threadCreate(input_loop, input_handler.get(),
+                                    stack_size, priority, -1, false);
     }
-    threadCreate(dispatch_loop, nullptr, stack_size, priority, -1, true);
+    Thread dispatch_thread =
+        threadCreate(dispatch_loop, nullptr, stack_size, priority, -1, false);
 
     // Run the main connection loop
     while (!listener->is_connection_closed() && aptMainLoop()) {
@@ -66,6 +71,20 @@ void run_loop(PCONFIGURATION config, N3dsConnectionListener *listener,
         if (aptShouldClose()) {
             listener->connection_terminated(0);
         }
+    }
+
+    // Make sure the helper threads see the connection as closed even if we
+    // left the loop because the system asked the app to exit.
+    if (!listener->is_connection_closed()) {
+        listener->connection_terminated(ML_ERROR_GRACEFUL_TERMINATION);
+    }
+    if (input_thread) {
+        threadJoin(input_thread, U64_MAX);
+        threadFree(input_thread);
+    }
+    if (dispatch_thread) {
+        threadJoin(dispatch_thread, U64_MAX);
+        threadFree(dispatch_thread);
     }
 }
 

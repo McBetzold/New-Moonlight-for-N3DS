@@ -29,7 +29,8 @@
 namespace boxart {
 
 static const char *CACHE_ROOT = MOONLIGHT_3DS_PATH "/boxart";
-static const u32 CACHE_MAGIC = 0x31415842; // "BXA1"
+// Bumped whenever the tiled layout changes so stale SD caches are redone.
+static const u32 CACHE_MAGIC = 0x32415842; // "BXA2"
 
 struct CacheHeader {
     u32 magic;
@@ -104,16 +105,19 @@ static inline u16 to_rgb565(u8 r, u8 g, u8 b) {
     return (u16)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
 }
 
-// Packs a 96x128 RGBA8 image (top row first) into the tiled texture. GPU
-// textures are stored bottom-up, so rows are flipped on the way in.
+// Packs a 96x128 RGBA8 image (top row first) into the tiled texture.
+// Empirically (checked on hardware) the image drawn with an unrotated
+// sub-texture (top = 1.0, bottom = 0.0) came out rotated 180 degrees when
+// rows were stored bottom-up with x unchanged, so store rows top-down and
+// mirror x within the 96-pixel image region instead.
 static void pack_tiled(const u8 *rgba, std::vector<u8> &tiled) {
     tiled.assign(TILED_BYTES, 0);
     u16 *dst = reinterpret_cast<u16 *>(tiled.data());
     for (int y = 0; y < IMG_H; y++) {
-        int ty = TEX_H - 1 - y;
         const u8 *row = rgba + (size_t)y * IMG_W * 4;
         for (int x = 0; x < IMG_W; x++) {
-            dst[tiled_index(x, ty)] =
+            int tx = IMG_W - 1 - x;
+            dst[tiled_index(tx, y)] =
                 to_rgb565(row[x * 4], row[x * 4 + 1], row[x * 4 + 2]);
         }
     }
@@ -304,13 +308,13 @@ bool texture_upload(Texture &t, const std::vector<u8> &tiled) {
 
     t.sub.width = IMG_W;
     t.sub.height = IMG_H;
-    // pack_tiled() already stores the image bottom-up, so sample it with
-    // top=0/bottom=1; using the tex3ds convention (top=1) on top of that
-    // flipped the art upside down on hardware.
+    // Unrotated sub-texture (top > bottom; citro3d treats top < bottom as a
+    // quarter-turn rotation, which is what produced sideways art). The
+    // orientation itself is handled in pack_tiled().
     t.sub.left = 0.0f;
-    t.sub.top = 0.0f;
+    t.sub.top = 1.0f;
     t.sub.right = (float)IMG_W / (float)TEX_W;
-    t.sub.bottom = (float)IMG_H / (float)TEX_H;
+    t.sub.bottom = 1.0f - (float)IMG_H / (float)TEX_H;
     t.valid = true;
     return true;
 }
