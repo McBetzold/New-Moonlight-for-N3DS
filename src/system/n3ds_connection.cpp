@@ -30,31 +30,46 @@ std::unique_ptr<N3dsConnectionListener> N3dsConnectionListener::instance =
     nullptr;
 
 void N3dsConnectionListener::connection_terminated(int errorCode) {
+    char buffer[96];
+    const char *message;
     switch (errorCode) {
     case ML_ERROR_GRACEFUL_TERMINATION:
-        printf("Connection has been terminated gracefully.\n");
+        message = "Connection has been terminated gracefully.";
         break;
     case ML_ERROR_NO_VIDEO_TRAFFIC:
-        printf("No video received from host. Check the host PC's firewall and "
-               "port forwarding rules.\n");
+        message = "No video received from host. Check the host PC's firewall "
+                  "and port forwarding rules.";
         break;
     case ML_ERROR_NO_VIDEO_FRAME:
-        printf("Your network connection isn't performing well. Reduce your "
-               "video bitrate setting or try a faster connection.\n");
+        message = "Your network connection isn't performing well. Reduce your "
+                  "video bitrate setting or try a faster connection.";
         break;
     case ML_ERROR_UNEXPECTED_EARLY_TERMINATION:
-        printf("The connection was unexpectedly terminated by the host due to "
-               "a video capture error. Make sure no DRM-protected content is "
-               "playing on the host.\n");
+        message = "The connection was unexpectedly terminated by the host due "
+                  "to a video capture error. Make sure no DRM-protected "
+                  "content is playing on the host.";
         break;
     case ML_ERROR_PROTECTED_CONTENT:
-        printf("The connection was terminated by the host due to DRM-protected "
-               "content. Close any DRM-protected content on the host and try "
-               "again.\n");
+        message = "The connection was terminated by the host due to "
+                  "DRM-protected content. Close any DRM-protected content on "
+                  "the host and try again.";
         break;
     default:
-        printf("Connection terminated with error: %d\n", errorCode);
+        snprintf(buffer, sizeof(buffer),
+                 "Connection terminated with error: %d", errorCode);
+        message = buffer;
         break;
+    }
+    printf("%s\n", message);
+
+    // Keep the first report; the stream menu's exit request and the library
+    // may both end up here.
+    if (!terminated.load()) {
+        message_lock.lock();
+        term_message = message;
+        message_lock.unlock();
+        term_code.store(errorCode);
+        terminated.store(true);
     }
 
     if (enable_motion) {
@@ -120,8 +135,51 @@ void N3dsConnectionListener::set_motion_event_state(
     }
 }
 
+void N3dsConnectionListener::stage_starting(int stage_in) {
+    stage.store(stage_in);
+    if (handshake_armed && stage_in == handshake_stage) {
+        handshake_armed = false;
+        LightEvent_Signal(&teardown_request);
+        LightEvent_Wait(&teardown_done);
+    }
+}
+
+void N3dsConnectionListener::stage_complete(int stage_in) {}
+
+void N3dsConnectionListener::stage_failed(int stage_in, int errorCode) {
+    failed_stage_value.store(stage_in);
+    failed_stage_code.store(errorCode);
+    printf("Stage '%s' failed: %d\n", LiGetStageName(stage_in), errorCode);
+}
+
+int N3dsConnectionListener::current_stage() { return stage.load(); }
+
+int N3dsConnectionListener::failed_stage() { return failed_stage_value.load(); }
+
+int N3dsConnectionListener::failed_stage_error() {
+    return failed_stage_code.load();
+}
+
+void N3dsConnectionListener::arm_ui_handshake(int stage_in) {
+    LightEvent_Clear(&teardown_request);
+    LightEvent_Clear(&teardown_done);
+    handshake_stage = stage_in;
+    handshake_armed = true;
+}
+
+bool N3dsConnectionListener::ui_teardown_requested() {
+    // Sticky event: stays signalled so it can be polled every frame.
+    return LightEvent_TryWait(&teardown_request);
+}
+
+void N3dsConnectionListener::ui_teardown_ack() {
+    LightEvent_Signal(&teardown_done);
+}
+
 N3dsConnectionListener::N3dsConnectionListener(bool enable_motion)
     : enable_motion(enable_motion) {
+    LightEvent_Init(&teardown_request, RESET_STICKY);
+    LightEvent_Init(&teardown_done, RESET_STICKY);
     MessageDispatcher::get_instance()->subscribe(
         MessageType::TOUCH_STATE_CHANGED, this);
     MessageDispatcher::get_instance()->subscribe(MessageType::EXIT_STREAM,
@@ -152,6 +210,38 @@ void N3dsConnectionListener::accept(IMessage *msg) {
 bool N3dsConnectionListener::is_connection_closed() {
     return connection_closed.load();
 };
+
+bool N3dsConnectionListener::has_terminated() { return terminated.load(); }
+
+int N3dsConnectionListener::termination_code() { return term_code.load(); }
+
+std::string N3dsConnectionListener::termination_message() {
+    message_lock.lock();
+    std::string copy = term_message;
+    message_lock.unlock();
+    return copy;
+}
+
+static void local_stage_starting(int stage) {
+    auto instance = N3dsConnectionListener::get_instance();
+    if (instance != nullptr) {
+        instance->stage_starting(stage);
+    }
+}
+
+static void local_stage_complete(int stage) {
+    auto instance = N3dsConnectionListener::get_instance();
+    if (instance != nullptr) {
+        instance->stage_complete(stage);
+    }
+}
+
+static void local_stage_failed(int stage, int errorCode) {
+    auto instance = N3dsConnectionListener::get_instance();
+    if (instance != nullptr) {
+        instance->stage_failed(stage, errorCode);
+    }
+}
 
 static void local_connection_terminated(int errorCode) {
     auto instance = N3dsConnectionListener::get_instance();
@@ -188,6 +278,9 @@ static void local_set_motion_event_state(unsigned short controllerNumber,
 }
 
 CONNECTION_LISTENER_CALLBACKS n3ds_connection_callbacks{
+    .stageStarting = local_stage_starting,
+    .stageComplete = local_stage_complete,
+    .stageFailed = local_stage_failed,
     .connectionTerminated = local_connection_terminated,
     .logMessage = local_connection_log_message,
     .connectionStatusUpdate = local_connection_status_update,
