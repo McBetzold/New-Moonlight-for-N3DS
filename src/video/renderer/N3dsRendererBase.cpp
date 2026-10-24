@@ -80,59 +80,6 @@ inline void N3dsRendererBase::write24(u8 *p, u32 val) {
     p[2] = val >> 16;
 }
 
-inline void N3dsRendererBase::draw_perf_px(u8 *dest, u32 idx, u8 r, u8 g,
-                                           u8 b) {
-    if (px_size == 2) {
-        // RGB565: the screens are initialized with GSP_RGB565_OES
-        u16 c = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
-        memcpy(dest + idx * 2, &c, 2);
-    } else {
-        // BGR8: stored as b, g, r
-        u8 *p = dest + idx * px_size;
-        p[0] = b;
-        p[1] = g;
-        p[2] = r;
-    }
-}
-
-inline void N3dsRendererBase::draw_perf_counters() {
-    u8 *dest = gfxGetFramebuffer(screen, GFX_LEFT, NULL, NULL);
-
-    // The framebuffer is column-major, so the first GSP_SCREEN_WIDTH (240)
-    // pixels in memory form the leftmost column of the screen, bottom to top.
-    // Clear it to black.
-    memset(dest, 0, GSP_SCREEN_WIDTH * px_size);
-
-    // Scale so the frame target lands at the middle of the column.
-    double perf_tick_divisor =
-        ((double)GSP_SCREEN_WIDTH) / ((double)(perf_frame_target_ticks * 2));
-    u32 perf_px = 0;
-    u32 perf_tmp_height = 0;
-
-#define PERF_DRAW(ticks, r, g, b)                                              \
-    perf_tmp_height = perf_tick_divisor * ((double)(ticks));                   \
-    do {                                                                       \
-        if (perf_px >= GSP_SCREEN_WIDTH)                                       \
-            break;                                                             \
-        draw_perf_px(dest, perf_px, r, g, b);                                  \
-        perf_px++;                                                             \
-    } while (perf_tmp_height-- > 0);
-
-    PERF_DRAW(perf_decode_ticks, 255, 0, 0);
-    PERF_DRAW(perf_fbcopy_ticks, 0, 0, 255);
-
-    // Two green pixels mark the frame target
-    perf_px = (GSP_SCREEN_WIDTH / 2) - 1;
-    PERF_DRAW(0, 0, 255, 0);
-    PERF_DRAW(0, 0, 255, 0);
-
-#undef PERF_DRAW
-
-    // The framebuffer lives in cached linear memory; make the CPU writes
-    // visible to the LCD.
-    GSPGPU_FlushDataCache(dest, GSP_SCREEN_WIDTH * px_size);
-}
-
 // Refresh the debug view's status panel once per second with the presented
 // frame rate, the per-frame timings and the estimated network round trip.
 inline void N3dsRendererBase::log_perf_counters() {
@@ -164,8 +111,11 @@ inline void N3dsRendererBase::log_perf_counters() {
     } else {
         snprintf(rtt_str, sizeof(rtt_str), "n/a");
     }
+    // The RTT is moonlight-common-c's estimate from the ENet control channel,
+    // whose acks are serviced on a coarse timer on the 3DS; it reads far
+    // higher than an ICMP ping and is only useful for spotting changes.
     DebugConsole::set_stats(
-        "%.0f fps  %dx%d  rtt %s\n"
+        "%.0f fps  %dx%d  ctrl rtt %s\n"
         "decode  avg %5.1f  max %5.1f ms\n"
         "present avg %5.1f  max %5.1f ms",
         perf_log_frames / elapsed_s, image_width, image_height, rtt_str,
@@ -442,7 +392,6 @@ void N3dsRendererBase::write_px_to_framebuffer_gpu(uint8_t *__restrict source) {
 
     perf_fbcopy_ticks = svcGetSystemTick() - start_ticks;
     if (debug) {
-        draw_perf_counters();
         log_perf_counters();
     }
 
