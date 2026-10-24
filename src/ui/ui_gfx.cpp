@@ -50,7 +50,9 @@ bool gfx_init() {
         return true;
     }
     // A previous stream may have left the top screen in stereoscopic mode.
-    gfxSet3D(false);
+    if (gfxIs3D()) {
+        gfxSet3D(false);
+    }
 
     if (!C3D_Init(C3D_DEFAULT_CMDBUF_SIZE)) {
         return false;
@@ -487,13 +489,13 @@ void wifi_off(float cx, float cy, float size, u32 color) {
 }
 
 void spinner(float cx, float cy, float r, u32 color, u64 time_ms) {
-    const int dots = 8;
-    int phase = (int)((time_ms / 90) % dots);
+    const int dot_count = 8;
+    int phase = (int)((time_ms / 90) % dot_count);
     float dot_r = std::max(1.5f, r * 0.22f);
-    for (int i = 0; i < dots; i++) {
-        int k = (i - phase + dots) % dots;
-        float alpha = 1.0f - (float)k / (float)dots;
-        float a = (float)i * 2.0f * (float)M_PI / (float)dots;
+    for (int i = 0; i < dot_count; i++) {
+        int k = (i - phase + dot_count) % dot_count;
+        float alpha = 1.0f - (float)k / (float)dot_count;
+        float a = (float)i * 2.0f * (float)M_PI / (float)dot_count;
         float px = cx + std::cos(a) * r;
         float py = cy + std::sin(a) * r;
         circle(px, py, dot_r, with_alpha(color, (u8)(40 + 215 * alpha)));
