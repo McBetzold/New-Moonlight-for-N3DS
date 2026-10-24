@@ -14,7 +14,7 @@ The launcher follows the Moonlight PC and Android apps: a list of your PCs, a gr
 
 After modding your 3DS and installing the Moonlight CIA, open the Moonlight application from your home menu.
 
-- Tap `Add PC` on the bottom screen (or press `SELECT`) and enter the IP address of the PC running Sunshine or GeForce Experience.
+- Tap `Add PC` on the bottom screen (or press `SELECT`). Choose `Search the local network` to scan your subnet for PCs running Sunshine or GeForce Experience and pick one from the list, or `Enter IP address` to type the address yourself.
     - Windows: Open the Start menu, type cmd, and press Enter. In the black window, type ipconfig and press Enter. Look for "IPv4 Address".
     - Mac: Click the Apple icon > System Settings (or Preferences) > Network. Select your Wi-Fi or Ethernet connection to see the IP address.
 - The PC appears as a card. A warning badge means it is offline, a lock means it is online but not paired yet, and a play badge means an app is currently running on it.

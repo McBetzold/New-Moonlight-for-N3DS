@@ -18,6 +18,7 @@
 #include "moonlight_ui.hpp"
 
 #include "../system/pair_record.hpp"
+#include "discovery.hpp"
 
 #include <errors.h>
 #include <http.h>
@@ -936,6 +937,15 @@ void MoonlightUi::refresh_all_hosts(bool interactive) {
 }
 
 void MoonlightUi::add_pc() {
+    int choice = menu("Add PC", {"Search the local network", "Enter IP address"});
+    if (choice == 0) {
+        discover_pcs();
+    } else if (choice == 1) {
+        add_pc_manual();
+    }
+}
+
+void MoonlightUi::add_pc_manual() {
     std::string input;
     if (!prompt_text("IP address of the host PC (e.g. 192.168.1.10)", "",
                      input)) {
@@ -959,7 +969,112 @@ void MoonlightUi::add_pc() {
     auto host = std::make_shared<HostEntry>();
     host->address = address;
     host->port = port;
-    if (!probe_host_blocking(host, "Connecting to " + host->address_text())) {
+    add_host_entry(host);
+}
+
+namespace {
+struct DiscoveredPc {
+    std::string address;
+    std::string name;
+    bool online = false;
+    bool paired = false;
+};
+} // namespace
+
+void MoonlightUi::discover_pcs() {
+    auto result = std::make_shared<std::vector<DiscoveredPc>>();
+    std::string key_dir = config_->key_dir;
+    bool unsupported = config_->unsupported;
+    auto job = Worker::instance().post([result, key_dir, unsupported] {
+        auto addresses = discovery::scan_local_network();
+        for (const auto &address : addresses) {
+            DiscoveredPc pc;
+            pc.address = address;
+            SERVER_DATA server;
+            memset(&server, 0, sizeof(server));
+            gs_cleanup();
+            http_set_timeout_s(5);
+            http_set_connect_timeout_s(3);
+            int status = gs_init(&server, (char *)pc.address.c_str(), 47989,
+                                 key_dir.c_str(), 0, unsupported);
+            http_set_timeout_s(60);
+            http_set_connect_timeout_s(10);
+            if (status == GS_OK) {
+                pc.online = true;
+                pc.paired = server.paired;
+                if (server.hostname && server.hostname[0]) {
+                    pc.name = server.hostname;
+                }
+                result->push_back(pc);
+            }
+        }
+    });
+
+    Modal m;
+    m.title = "Searching for PCs";
+    m.busy_text = "Scanning your network for PCs running Sunshine or GeForce "
+                  "Experience. This takes a few seconds.";
+    if (!wait_job(job, m)) {
+        return;
+    }
+
+    if (result->empty()) {
+        Modal none;
+        none.title = "No PCs found";
+        none.message =
+            "No GameStream hosts answered on this network. Make sure Sunshine "
+            "or GeForce Experience is running and the PC is on the same Wi-Fi "
+            "network, or add the PC by IP address.";
+        none.buttons = {"Enter IP address", "Cancel"};
+        if (show_modal(none) == 0) {
+            add_pc_manual();
+        }
+        return;
+    }
+
+    std::vector<std::string> items;
+    std::vector<int> existing;
+    for (const auto &pc : *result) {
+        std::string label = pc.name.empty() ? pc.address
+                                            : pc.name + " (" + pc.address + ")";
+        int idx = -1;
+        for (size_t i = 0; i < hosts_.size(); i++) {
+            if (hosts_[i]->address == pc.address) {
+                idx = (int)i;
+                break;
+            }
+        }
+        if (idx >= 0) {
+            label += " - added";
+        } else if (!pc.paired) {
+            label += " - not paired";
+        }
+        items.push_back(label);
+        existing.push_back(idx);
+    }
+
+    int choice = menu("Found " + std::to_string(result->size()) +
+                          (result->size() == 1 ? " PC" : " PCs"),
+                      items);
+    if (choice < 0) {
+        return;
+    }
+    if (existing[choice] >= 0) {
+        pcs_select(existing[choice]);
+        toast("That PC is already in the list");
+        return;
+    }
+
+    const DiscoveredPc &pc = (*result)[choice];
+    auto host = std::make_shared<HostEntry>();
+    host->address = pc.address;
+    host->port = 47989;
+    host->name = pc.name;
+    add_host_entry(host);
+}
+
+void MoonlightUi::add_host_entry(const std::shared_ptr<HostEntry> &host) {
+    if (!probe_host_blocking(host, "Connecting to " + host->display_name())) {
         std::string msg = "Unable to connect to the specified PC.";
         if (!host->last_error.empty()) {
             msg += "\n" + host->last_error;
