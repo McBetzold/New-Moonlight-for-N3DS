@@ -364,12 +364,16 @@ void MoonlightUi::modal_button_rect(const Modal &m, int index, float &x,
         x = 20.0f + index * (w + gap);
         y = m.busy ? 170.0f : 104.0f;
     } else {
-        h = 36.0f;
-        float gap = 8.0f;
+        // Stack vertically and shrink the buttons so the whole list always
+        // fits on the 240px screen (six items overflowed at a fixed 36px).
+        const float margin = 12.0f;
+        const float avail = BOT_H - 2.0f * margin;
+        float gap = n > 4 ? 6.0f : 8.0f;
+        h = std::min(36.0f, (avail - (n - 1) * gap) / (float)n);
         w = 232.0f;
         x = (BOT_W - w) / 2.0f;
         float total = n * h + (n - 1) * gap;
-        y = (BOT_H - total) / 2.0f + index * (h + gap) + 8.0f;
+        y = margin + (avail - total) / 2.0f + index * (h + gap);
     }
 }
 
