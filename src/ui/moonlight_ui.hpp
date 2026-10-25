@@ -147,6 +147,8 @@ class MoonlightUi {
         Type type = Header;
         std::string label;
         std::string desc;
+        // Optional dynamic description (e.g. per selected preset)
+        std::function<std::string()> desc_fn;
         std::function<std::string()> value;
         std::function<void(int)> adjust; // -1 / +1 (left / right)
         std::function<void()> activate;  // A button or tap
@@ -278,6 +280,7 @@ class MoonlightUi {
     float settings_scroll_ = 0;
     std::vector<std::string> desc_lines_;
     int desc_lines_for_ = -1;
+    std::string desc_cache_text_;
 };
 
 } // namespace ui
