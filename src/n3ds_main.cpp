@@ -19,6 +19,7 @@
 
 #include "config.hpp"
 #include "input/touch/TouchHandler.hpp"
+#include "system/apt_state.hpp"
 #include "ui/moonlight_ui.hpp"
 
 #include <3ds.h>
@@ -82,6 +83,7 @@ static void init_3ds() {
     osSetSpeedupEnable(true);
     aptSetSleepAllowed(false);
     aptInit();
+    apt_state_init();
     hidInit();
 
     SOC_buffer = (u32 *)memalign(SOC_ALIGN, SOC_BUFFERSIZE);
