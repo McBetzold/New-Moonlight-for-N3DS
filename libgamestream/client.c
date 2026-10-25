@@ -275,6 +275,20 @@ static int load_serverinfo(PSERVER_DATA server, bool https) {
       server->hostname = hostnameText;
   }
 
+  // Optional: the host's MAC address, for Wake-on-LAN (a placeholder of all
+  // zeros is sent to unpaired clients)
+  {
+    char *macText = NULL;
+    if (xml_search(data->memory, data->size, "mac", &macText) == GS_OK) {
+      if (strlen(macText) >= 17 && strcmp(macText, "00:00:00:00:00:00") != 0) {
+        free(server->mac);
+        server->mac = macText;
+      } else {
+        free(macText);
+      }
+    }
+  }
+
   // Optional Apollo extensions. Permission is sent over plain HTTP too (as 0),
   // so its presence identifies an Apollo host even before pairing; the rest
   // only comes with the HTTPS request of a paired client.

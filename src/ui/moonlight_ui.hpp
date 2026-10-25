@@ -45,6 +45,7 @@ struct HostEntry {
     std::string address;
     uint16_t port = 47989;
     std::string name;
+    std::string mac; // for Wake-on-LAN, learned from the host while paired
 
     bool status_known = false;
     bool online = false;
@@ -117,6 +118,15 @@ struct AppEntry {
     boxart::Texture art;
     std::shared_ptr<Worker::Job> job;
     std::shared_ptr<ArtResult> art_result;
+};
+
+// How a stream ended, for the launcher to decide between reconnecting,
+// showing an error and going back to the app grid.
+struct StreamOutcome {
+    bool connected = false;      // LiStartConnection succeeded
+    bool lost = false;           // ended by an error, not by the user
+    bool home_requested = false; // the user pressed HOME to leave
+    std::string message;         // error text for the user
 };
 
 struct Modal {
@@ -258,8 +268,16 @@ class MoonlightUi {
 
     // ---- stream launch (moonlight_ui_stream.cpp)
     void launch_app(int index);
-    void run_stream(const std::shared_ptr<HostEntry> &host, const AppEntry &app);
+    StreamOutcome run_stream(const std::shared_ptr<HostEntry> &host,
+                             const AppEntry &app);
     void after_stream(const std::shared_ptr<HostEntry> &host);
+    // Opens the host's app list and launches the app it reports as running.
+    void resume_running(const std::shared_ptr<HostEntry> &host);
+    // "Resume on start": after the first status check, resume a running app.
+    void maybe_resume_on_start();
+
+    // ---- Wake-on-LAN
+    void wake_host(const std::shared_ptr<HostEntry> &host);
 
     // ---- Settings view (moonlight_ui_settings.cpp)
     void settings_enter();

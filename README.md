@@ -31,6 +31,17 @@ After modding your 3DS and installing the Moonlight CIA, open the Moonlight appl
 - NOTE: The Stretch view shows the upper half of the stream on the top screen and the lower half on the bottom screen at the same scale; because the bottom screen is narrower, it shows the central 80% of the lower half rather than squeezing it. Use the 800x480 preset for it.
 - NOTE: When the Magnify view is active, you can lock the region you are magnifying by holding either of the shoulder buttons (L or R).
     - When the view is locked, you can use the touchscreen to click, drag, and release items in the selected region of the screen (similar to the Mirror and Stretch views)
+- NOTE: The Touch view is the Mirror view with real touch input: Sunshine and Apollo receive the stylus as a touch screen, so Windows shows touch feedback and apps that distinguish touch from mouse behave accordingly. On hosts without touch support it falls back to mouse clicks.
+- NOTE: The Commands view lists the server commands of an Apollo host (see *Apollo hosts* below).
+- Holding `START` for about a second turns the C-stick into a mouse pointer with `ZL`/`ZR` as its buttons; hold `START` again to get the right stick back. This can be turned off under Input Settings.
+- A small yellow square in the top-right corner of the top screen means moonlight-common-c is seeing heavy packet loss; move closer to the router before the stream drops. If it drops anyway, Moonlight reconnects by itself up to three times (Host Settings, *Reconnect automatically*).
+
+### Waking and resuming
+
+- **Wake PC.** Once Moonlight has connected to a paired PC, it remembers the PC's network address. When that PC later shows as offline, `A` (or *Wake PC* in its options menu) sends Wake-on-LAN packets and waits up to 90 seconds for it to answer. Wake-on-LAN has to be enabled in the PC's BIOS and network adapter settings, and the PC must be asleep rather than shut down.
+- **Resume running app.** A PC with an app still running offers *Resume running app* in its options menu, which opens the app list and resumes that app in one step.
+- **Resume on start** (Host Settings) does the same automatically when Moonlight opens: after the first status check, a three-second countdown resumes the running app unless you choose to stay in the launcher.
+- **Volume boost** (Audio Settings) makes the stream louder than the PC sends it, up to 400%. The 3DS speakers are quiet; loud passages distort above about 200%.
 
 ### Settings
 
@@ -75,7 +86,7 @@ The top screen can show the stream in stereoscopic 3D. Choose a mode under **3D 
 ### Performance tips (New 3DS)
 
 - 800x480 at 60fps is comfortably within the New 3DS's budget (about 6.5ms decode and 3ms present per 16.7ms frame), so there is normally no need to go lower. 800x240 (the top screen's native wide-mode size) halves the decoder's work, but only looks right if the host *scales* a 5:3 picture down to it; hosts that switch their display to the requested mode (Apollo's virtual display, Sunshine with display-mode changes on) will render an 800x240 desktop that appears stretched 2x vertically. On Apollo, add a display mode remap `800x240 -> 1280x768` before using it.
-- Hardware decoding and presentation run on their own thread (core 2), so the network/FEC thread is never blocked by the decoder. Open the debug view from the in-stream menu: the bottom screen shows a status panel (fps, stream size, network RTT, decode and present times) above a scrolling log, and the leftmost column of the top screen shows per-frame decode (red) and present (blue) time with green marks at the 16.7ms frame target.
+- Hardware decoding and presentation run on their own thread (core 2), so the network/FEC thread is never blocked by the decoder. Open the debug view from the in-stream menu: the bottom screen shows a status panel above a scrolling log with the frame rate, stream size, frames lost on the network since the last update, control-channel RTT, decode and present times, and the host's own capture-to-send latency. Frames lost with a low host latency point at Wi-Fi; a high host latency points at the PC.
 - Keep the 3DS close to the router and prefer a 2.4GHz network with little congestion; the 3DS has no 5GHz radio.
 
 ## Documentation

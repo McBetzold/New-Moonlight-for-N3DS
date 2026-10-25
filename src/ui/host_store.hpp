@@ -30,6 +30,7 @@ struct Record {
     std::string address;
     uint16_t port = 47989;
     std::string name; // hostname reported by the server, may be empty
+    std::string mac;  // for Wake-on-LAN, learned while paired; may be empty
 };
 
 std::vector<Record> load();

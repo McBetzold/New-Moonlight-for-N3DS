@@ -18,6 +18,7 @@
 #include "moonlight_ui.hpp"
 
 #include "../system/pair_record.hpp"
+#include "../system/wake_on_lan.hpp"
 #include "discovery.hpp"
 
 #include <errors.h>
@@ -120,6 +121,7 @@ MoonlightUi::MoonlightUi(PCONFIGURATION config) : config_(config) {
         h->address = rec.address;
         h->port = rec.port;
         h->name = rec.name;
+        h->mac = rec.mac;
         hosts_.push_back(h);
     }
 }
@@ -137,6 +139,7 @@ void MoonlightUi::run() {
         return;
     }
     refresh_all_hosts(false);
+    maybe_resume_on_start();
 
     while (!quit_) {
         if (!poll()) {
@@ -713,7 +716,13 @@ void MoonlightUi::pcs_update(const Input &in) {
             }
         }
         if (in.pressed(KEY_A)) {
-            connect_to(hosts_[sel_pc_]);
+            auto host = hosts_[sel_pc_];
+            if (host->status_known && !host->online &&
+                wol::valid_mac(host->mac)) {
+                wake_host(host);
+            } else {
+                connect_to(host);
+            }
             return;
         }
         if (in.pressed(KEY_X)) {
@@ -816,7 +825,8 @@ void MoonlightUi::pcs_draw_top() {
     }
 
     std::string action = !h.status_known ? "Connect"
-                         : !h.online     ? "Retry"
+                         : !h.online     ? (wol::valid_mac(h.mac) ? "Wake PC"
+                                                                  : "Retry")
                          : !h.paired     ? "Pair"
                                          : "Connect";
     draw_hints({{"A", action},
@@ -878,6 +888,7 @@ void MoonlightUi::save_hosts() {
         r.address = h->address;
         r.port = h->port;
         r.name = h->name;
+        r.mac = h->mac;
         records.push_back(r);
     }
     hosts::save(records);
@@ -933,8 +944,18 @@ void MoonlightUi::apply_probe(PendingProbe &probe) {
         h.server_valid = true;
         h.server_desc = r.desc;
         h.last_error.clear();
+        bool changed = false;
         if (!r.hostname.empty() && r.hostname != h.name) {
             h.name = r.hostname;
+            changed = true;
+        }
+        // Remember the MAC so the PC can be woken once it is asleep
+        if (r.server.mac && wol::valid_mac(r.server.mac) &&
+            h.mac != r.server.mac) {
+            h.mac = r.server.mac;
+            changed = true;
+        }
+        if (changed) {
             save_hosts();
         }
         if (h.paired) {
@@ -1164,6 +1185,8 @@ void MoonlightUi::pc_options() {
     std::vector<int> actions;
     enum {
         ACT_CONNECT,
+        ACT_RESUME,
+        ACT_WAKE,
         ACT_PAIR,
         ACT_PAIR_OTP,
         ACT_UNPAIR,
@@ -1173,6 +1196,15 @@ void MoonlightUi::pc_options() {
     };
     items.push_back("Connect");
     actions.push_back(ACT_CONNECT);
+    if (host->status_known && host->online && host->paired &&
+        host->current_game != 0) {
+        items.push_back("Resume running app");
+        actions.push_back(ACT_RESUME);
+    }
+    if (!(host->status_known && host->online) && wol::valid_mac(host->mac)) {
+        items.push_back("Wake PC");
+        actions.push_back(ACT_WAKE);
+    }
     if (host->status_known && host->online) {
         items.push_back(host->paired ? "Unpair" : "Pair");
         actions.push_back(host->paired ? ACT_UNPAIR : ACT_PAIR);
@@ -1196,6 +1228,12 @@ void MoonlightUi::pc_options() {
     switch (actions[choice]) {
     case ACT_CONNECT:
         connect_to(host);
+        break;
+    case ACT_RESUME:
+        resume_running(host);
+        break;
+    case ACT_WAKE:
+        wake_host(host);
         break;
     case ACT_PAIR:
         pair_host(host);
@@ -1395,6 +1433,158 @@ void MoonlightUi::unpair_host(const std::shared_ptr<HostEntry> &host) {
         toast("Unpaired from " + host->display_name());
     } else {
         show_error("Unpair failed", *error);
+    }
+}
+
+void MoonlightUi::wake_host(const std::shared_ptr<HostEntry> &host) {
+    if (!wol::valid_mac(host->mac)) {
+        show_error("Cannot wake " + host->display_name(),
+                   "Moonlight learns the PC's network address the first time "
+                   "it connects while paired. Connect once while the PC is "
+                   "on, then Wake PC will be available.");
+        return;
+    }
+    if (!wol::send(host->mac, host->address)) {
+        show_error("Cannot wake " + host->display_name(),
+                   "The wake-up packet could not be sent. Check the 3DS's "
+                   "Wi-Fi connection.");
+        return;
+    }
+
+    // Resend the packet a few times and probe until the host answers, for up
+    // to 90 seconds. Wake-on-LAN must be enabled in the PC's BIOS and network
+    // adapter settings for this to work at all.
+    const u64 started = osGetTime();
+    const u64 deadline = started + 90 * 1000;
+    u64 next_probe = started + 4000;
+    u64 next_wake = started + 10 * 1000;
+    Modal m;
+    m.title = "Waking " + host->display_name();
+    m.busy = true;
+    m.busy_text = "Sent the wake-up packet, waiting for the PC";
+    m.buttons = {"Cancel"};
+    bool timed_out = false;
+    int r = show_modal(m, [&] {
+        u64 now = osGetTime();
+        if (host->status_known && host->online) {
+            return true;
+        }
+        if (now >= next_wake) {
+            wol::send(host->mac, host->address);
+            next_wake = now + 10 * 1000;
+        }
+        if (now >= next_probe && !host->probing) {
+            probe_host(host, false);
+            next_probe = now + 4000;
+            m.busy_text = "Waiting for the PC (" +
+                          std::to_string((now - started) / 1000) + " s)";
+        }
+        if (now >= deadline) {
+            timed_out = true;
+            return true;
+        }
+        return false;
+    });
+    if (r != -2) {
+        return; // cancelled
+    }
+    if (host->online) {
+        toast(host->display_name() + " is awake");
+        connect_to(host);
+    } else if (timed_out) {
+        show_error("Still asleep",
+                   host->display_name() +
+                       " did not answer within 90 seconds. Make sure "
+                       "Wake-on-LAN is enabled in the PC's BIOS and network "
+                       "adapter settings, and that the PC is asleep rather "
+                       "than fully shut down.");
+    }
+}
+
+void MoonlightUi::resume_running(const std::shared_ptr<HostEntry> &host) {
+    if (!host->server_valid || !host->online) {
+        if (!probe_host_blocking(host,
+                                 "Connecting to " + host->display_name())) {
+            show_error("Connection failed", host->last_error.empty()
+                                                ? "Unable to reach the PC."
+                                                : host->last_error);
+            return;
+        }
+    }
+    if (!host->paired || host->current_game == 0) {
+        toast("Nothing is running on " + host->display_name());
+        return;
+    }
+    if (!load_apps(host, true)) {
+        return;
+    }
+    cur_host_ = host;
+    app_scroll_ = 0;
+    app_name_lines_for_ = -1;
+    view_ = View::Apps;
+    for (size_t i = 0; i < apps_.size(); i++) {
+        if (apps_[i].id == host->current_game) {
+            apps_select((int)i);
+            launch_app((int)i);
+            return;
+        }
+    }
+    toast("The running app is not in the list");
+}
+
+void MoonlightUi::maybe_resume_on_start() {
+    if (!config_->resume_on_start || hosts_.empty()) {
+        return;
+    }
+    // Give the start-up status checks a few seconds to come back
+    u64 deadline = osGetTime() + 6000;
+    Modal m;
+    m.title = "Resume on start";
+    m.busy = true;
+    m.busy_text = "Checking your PCs for a running app";
+    m.buttons = {"Skip"};
+    int r = show_modal(m, [&] {
+        if (osGetTime() > deadline) {
+            return true;
+        }
+        for (const auto &h : hosts_) {
+            if (h->probing || !h->status_known) {
+                return false;
+            }
+        }
+        return true;
+    });
+    if (r != -2 || quit_) {
+        return;
+    }
+    std::shared_ptr<HostEntry> target;
+    for (const auto &h : hosts_) {
+        if (h->status_known && h->online && h->paired && h->current_game) {
+            target = h;
+            break;
+        }
+    }
+    if (!target) {
+        return;
+    }
+    // Short countdown so the launcher can still be reached
+    u64 go_at = osGetTime() + 3000;
+    Modal c;
+    c.title = "Resuming on " + target->display_name();
+    c.busy = true;
+    c.buttons = {"Stay in launcher"};
+    r = show_modal(c, [&] {
+        u64 now = osGetTime();
+        c.busy_text = "Resuming the running app in " +
+                      std::to_string((go_at - std::min(now, go_at) + 999) /
+                                     1000) +
+                      "...";
+        return now >= go_at;
+    });
+    if (r == -2 && !quit_) {
+        pcs_select((int)(std::find(hosts_.begin(), hosts_.end(), target) -
+                         hosts_.begin()));
+        resume_running(target);
     }
 }
 

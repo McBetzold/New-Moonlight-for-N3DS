@@ -103,48 +103,110 @@ void MoonlightUi::launch_app(int index) {
     }
 
     config_->stream.supportedVideoFormats = VIDEO_FORMAT_H264;
-
-    // Phase 1: ask the host to launch (or resume) the app.
-    auto status = std::make_shared<int>(GS_FAILED);
-    auto error = std::make_shared<std::string>();
     PCONFIGURATION cfg = config_;
-    int app_id = app.id;
-    std::string app_uuid = app.uuid;
-    auto job = Worker::instance().post([host, cfg, app_id, app_uuid, status,
-                                        error] {
-        http_set_timeout_s(30);
-        gs_set_host_display_mode(cfg->host_width, cfg->host_height);
-        *status = gs_start_app(&host->server, &cfg->stream, app_id,
-                               app_uuid.c_str(), cfg->sops, cfg->localaudio,
-                               1);
-        http_set_timeout_s(60);
-        if (*status != GS_OK) {
-            *error = gs_error ? gs_error : "";
+
+    // Phase 1: ask the host to launch (or resume) the app. Returns false
+    // when the user should stay in the launcher (error already shown).
+    auto start_on_host = [&](bool reconnecting) {
+        auto status = std::make_shared<int>(GS_FAILED);
+        auto error = std::make_shared<std::string>();
+        int app_id = app.id;
+        std::string app_uuid = app.uuid;
+        auto job = Worker::instance().post([host, cfg, app_id, app_uuid,
+                                            status, error] {
+            http_set_timeout_s(30);
+            gs_set_host_display_mode(cfg->host_width, cfg->host_height);
+            *status = gs_start_app(&host->server, &cfg->stream, app_id,
+                                   app_uuid.c_str(), cfg->sops,
+                                   cfg->localaudio, 1);
+            http_set_timeout_s(60);
+            if (*status != GS_OK) {
+                *error = gs_error ? gs_error : "";
+            }
+        });
+
+        Modal m;
+        m.title = (reconnecting ? "Reconnecting to " : "Starting ") + app.name;
+        m.busy_text = (host->current_game == app.id ? "Resuming on "
+                                                    : "Launching on ") +
+                      host->display_name();
+        if (!wait_job(job, m)) {
+            return false;
         }
-    });
+        if (*status != GS_OK) {
+            show_error("Unable to start " + app.name,
+                       start_app_error(*status, *error, *config_));
+            return false;
+        }
+        host->current_game = app.id;
+        return true;
+    };
 
-    Modal m;
-    m.title = "Starting " + app.name;
-    m.busy_text = (host->current_game == app.id ? "Resuming on "
-                                                : "Launching on ") +
-                  host->display_name();
-    if (!wait_job(job, m)) {
-        return;
-    }
-    if (*status != GS_OK) {
-        show_error("Unable to start " + app.name,
-                   start_app_error(*status, *error, *config_));
-        return;
-    }
-    host->current_game = app.id;
+    // Phase 2: connect and stream, reconnecting after network drops.
+    const int max_reconnects = 3;
+    int attempt = 0;
+    bool connected_once = false;
+    while (true) {
+        if (!start_on_host(attempt > 0)) {
+            break;
+        }
+        StreamOutcome out = run_stream(host, app);
+        if (quit_) {
+            return;
+        }
+        connected_once = connected_once || out.connected;
 
-    // Phase 2: connect and stream.
-    run_stream(host, app);
+        bool retry = out.connected && out.lost && !out.home_requested &&
+                     cfg->auto_reconnect && attempt < max_reconnects;
+        if (!retry) {
+            if (!out.connected) {
+                show_error("Unable to start the stream",
+                           out.message +
+                               "\nCheck that the host is reachable and that "
+                               "the stream settings are supported.");
+            } else if (out.lost) {
+                show_error("Connection lost", out.message);
+            }
+            break;
+        }
+
+        // Brief notice, then check the host still has the app running
+        attempt++;
+        Modal m;
+        m.title = "Connection lost";
+        m.message = out.message;
+        m.busy = true;
+        m.busy_text = "Reconnecting (" + std::to_string(attempt) + " of " +
+                      std::to_string(max_reconnects) + ")";
+        m.buttons = {"Cancel"};
+        u64 wait_until = osGetTime() + 2000;
+        if (show_modal(m, [&] { return osGetTime() >= wait_until; }) != -2) {
+            break;
+        }
+        if (!probe_host_blocking(host,
+                                 "Reconnecting to " + host->display_name())) {
+            show_error("Connection lost",
+                       host->display_name() + " is not answering.");
+            break;
+        }
+        if (host->current_game != app.id) {
+            show_error("Connection lost",
+                       app.name + " is no longer running on " +
+                           host->display_name() + ".");
+            break;
+        }
+    }
+
+    if (connected_once && cfg->quitappafter) {
+        quit_running_app(host);
+    }
+    after_stream(host);
 }
 
-void MoonlightUi::run_stream(const std::shared_ptr<HostEntry> &host,
-                             const AppEntry &app) {
+StreamOutcome MoonlightUi::run_stream(const std::shared_ptr<HostEntry> &host,
+                                      const AppEntry &app) {
     PCONFIGURATION cfg = config_;
+    StreamOutcome outcome;
 
     // Release texture memory before the decoder allocates its buffers.
     Worker::instance().drop_background();
@@ -155,7 +217,7 @@ void MoonlightUi::run_stream(const std::shared_ptr<HostEntry> &host,
         input_handler = std::make_shared<N3dsInput>(
             cfg->stream.width, cfg->stream.height, cfg->swap_face_buttons,
             cfg->swap_triggers_and_shoulders, cfg->use_triggers_for_mouse,
-            cfg->motion_controls);
+            cfg->motion_controls, cfg->cstick_mouse);
     }
 
     AUDIO_RENDERER_CALLBACKS *audio_callbacks =
@@ -281,31 +343,29 @@ void MoonlightUi::run_stream(const std::shared_ptr<HostEntry> &host,
     }
     input_reset();
 
+    outcome.connected = connect_status == 0;
+    if (connect_status != 0) {
+        outcome.lost = true;
+        outcome.message = failure;
+    } else if (terminated && term_code != ML_ERROR_GRACEFUL_TERMINATION) {
+        outcome.lost = true;
+        outcome.message = term_message;
+    }
+
     if (quit_) {
-        return;
+        return outcome;
     }
 
     if (apt_state_take_home_request()) {
         // HOME was pressed during the stream: show the launcher, then do the
         // jump the input thread deferred. Returns when the user comes back.
+        outcome.home_requested = true;
         render(nullptr);
         aptJumpToHomeMenu();
         input_reset();
     }
 
-    if (connect_status == 0 && cfg->quitappafter) {
-        quit_running_app(host);
-    }
-
-    if (connect_status != 0) {
-        show_error("Unable to start the stream",
-                   failure + "\nCheck that the host is reachable and that the "
-                             "stream settings are supported.");
-    } else if (terminated && term_code != ML_ERROR_GRACEFUL_TERMINATION) {
-        show_error("Connection lost", term_message);
-    }
-
-    after_stream(host);
+    return outcome;
 }
 
 void MoonlightUi::after_stream(const std::shared_ptr<HostEntry> &host) {

@@ -58,6 +58,9 @@ typedef struct _SERVER_DATA {
   /* 1 = virtual display driver ready, 0 = not ready, -1 = not reported */
   int virtualDisplayDriverReady;
   char* currentGameUuid; /* optional */
+  /* MAC address ("aa:bb:cc:dd:ee:ff") for Wake-on-LAN; only reported to a
+   * paired client over HTTPS, NULL or "00:00:00:00:00:00" otherwise */
+  char* mac;
 } SERVER_DATA, *PSERVER_DATA;
 
 /* Apollo client permission bits (crypto::PERM in Apollo's source) */
