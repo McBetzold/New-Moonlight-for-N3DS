@@ -231,25 +231,11 @@ void MoonlightUi::show_guide(const std::string &title, const GuidePage *pages,
             }
             go_to(page + 1);
         }
-        // Up/down walk through the whole guide: scroll a long page first,
-        // then move on to the neighbouring page. Crossing to another page
-        // takes a fresh press (D-pad or Circle Pad), so holding the button
-        // to scroll never races through pages.
-        if (in_.nav & KEY_DDOWN) {
-            if (first < max_first) {
-                first++;
-            } else if ((in_.down & KEY_DOWN) && page < count - 1) {
-                go_to(page + 1);
-            }
-        }
         if (in_.nav & KEY_DUP) {
-            if (first > 0) {
-                first--;
-            } else if ((in_.down & KEY_UP) && page > 0) {
-                go_to(page - 1);
-                // Continue reading backwards from the end of that page
-                first = max_first_line(lines);
-            }
+            first = std::max(0, first - 1);
+        }
+        if (in_.nav & KEY_DDOWN) {
+            first = std::min(max_first, first + 1);
         }
         if (in_.tap) {
             for (int i = 0; i < count; i++) {
@@ -321,8 +307,10 @@ void MoonlightUi::show_guide(const std::string &title, const GuidePage *pages,
         }
 
         std::vector<std::pair<const char *, std::string>> hints;
-        hints.push_back({"^v", "Move"});
         hints.push_back({"<>", "Page"});
+        if (first > 0 || more) {
+            hints.push_back({"^v", "Scroll"});
+        }
         hints.push_back({"A", page == count - 1 ? "Done" : "Next"});
         hints.push_back({"B", "Close"});
         draw_hints(hints);
