@@ -55,6 +55,10 @@ static const ResolutionPreset PRESETS[] = {
     {400, 240, 0, 0, "400x240 (Games)"},
     {800, 480, 0, 0, "800x480 (Desktop)"},
     {800, 480, 1920, 1152, "800x480 (PC games, 1920x1152 host)"},
+    // Stretch view: each half is 400x240, i.e. the top screen's exact shape,
+    // and the bottom screen shows the middle 320 of those 400 columns. The
+    // host renders 800x960 so the desktop stays usable.
+    {400, 480, 800, 960, "400x480 (Dual screen, 800x960 host)"},
     {640, 480, 0, 0, "640x480 (Bottom-screen views)"},
     {320, 240, 0, 0, "320x240 (Bottom-screen 1:1)"},
 };
@@ -173,7 +177,8 @@ void MoonlightUi::settings_build() {
                  "shape with room for the desktop. PC games: streams 800x480 "
                  "but asks the host for a 1920x1152 display, so games that "
                  "reject tiny screens run and Apollo scales the picture down. "
-                 "A: custom size.";
+                 "Dual screen: for the Stretch view, each half matches a "
+                 "screen. A: custom size.";
         r.value = [cfg] {
             int i = preset_index(cfg);
             if (i >= 0) {

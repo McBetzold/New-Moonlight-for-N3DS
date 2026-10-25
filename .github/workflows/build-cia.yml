@@ -17,6 +17,10 @@ jobs:
         run: docker build --network=host -t moonlight-n3ds .
       - name: Build CIA
         run: docker run --rm -v .:/moonlight-N3DS -w /moonlight-N3DS moonlight-n3ds:latest make
+      - name: Export symbols
+        # Sorted symbol table so a crash screen's PC/LR can be mapped to a
+        # function without the toolchain (the code segment loads at 0x100000).
+        run: docker run --rm -v .:/moonlight-N3DS -w /moonlight-N3DS moonlight-n3ds:latest bash -c "source /etc/profile.d/devkit-env.sh && \$DEVKITARM/bin/arm-none-eabi-nm -n -C moonlight.elf > symbols.txt"
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -24,3 +28,5 @@ jobs:
           path: |
             ./*.cia
             ./*.3dsx
+            ./*.elf
+            ./symbols.txt
