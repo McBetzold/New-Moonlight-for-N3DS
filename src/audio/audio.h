@@ -25,3 +25,8 @@
 
 extern AUDIO_RENDERER_CALLBACKS audio_callbacks_mock;
 extern AUDIO_RENDERER_CALLBACKS audio_callbacks_n3ds;
+
+// Gain applied to decoded audio, in percent (100 = unchanged, up to 400).
+// Louder settings clip loud passages; the 3DS speakers are quiet enough that
+// 150-200% is usually clean.
+void n3ds_audio_set_gain_percent(int percent);

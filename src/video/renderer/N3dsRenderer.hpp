@@ -65,8 +65,17 @@ class N3dsRendererBase {
     // starts; the top renderer reads them every frame.
     static void set_stereo_options(STEREO_3D_MODE mode, bool swap_eyes);
 
+    // Called by the decoder for every frame it receives (receive thread):
+    // the host's frame number, to count frames lost on the network, and its
+    // capture-to-send latency in tenths of a millisecond. Feeds the debug
+    // view's status panel.
+    static void note_frame(int frame_number, unsigned host_latency_01ms);
+
   protected:
     inline void log_perf_counters();
+    // Small warning block in the top screen's corner while moonlight-common-c
+    // reports a poor connection
+    void draw_connection_marker();
     void write_px_to_framebuffer_gpu(
         uint8_t *__restrict source,
         const N3dsStereoView &stereo = N3dsStereoView());
@@ -91,6 +100,14 @@ class N3dsRendererBase {
 
     static STEREO_3D_MODE stereo_mode;
     static bool stereo_swap_eyes;
+
+    // Written by note_frame() on the receive thread, read and reset once a
+    // second by log_perf_counters(); a torn read now and then is harmless.
+    static volatile int last_frame_number;
+    static volatile u32 frames_lost;
+    static volatile u32 host_latency_sum;
+    static volatile u32 host_latency_max;
+    static volatile u32 host_latency_count;
 
     gfxScreen_t screen;
     int surface_width;

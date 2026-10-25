@@ -90,6 +90,9 @@ void N3dsConnectionListener::connection_log_message(const char *format,
 }
 
 void N3dsConnectionListener::connection_status_update(int status) {
+    // Drives the warning marker on the top screen
+    connection_poor.store(status == CONN_STATUS_POOR);
+
     if (!debug.load()) {
         return;
     }
@@ -102,6 +105,10 @@ void N3dsConnectionListener::connection_status_update(int status) {
         printf("Connection is poor\n");
         break;
     }
+}
+
+bool N3dsConnectionListener::connection_is_poor() {
+    return connection_poor.load();
 }
 
 void N3dsConnectionListener::set_motion_event_state(

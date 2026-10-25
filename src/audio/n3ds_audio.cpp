@@ -36,6 +36,29 @@ static int sampleRate;
 static int channelCount;
 static ndspWaveBuf audio_wave_buf[WAVEBUF_SIZE];
 static int wave_buf_idx = 0;
+static int gain_percent = 100;
+
+void n3ds_audio_set_gain_percent(int percent) {
+    gain_percent = percent < 100 ? 100 : percent > 400 ? 400 : percent;
+}
+
+// Scales samples in place with saturation. Done on the CPU after decoding
+// rather than through the DSP mix, which cannot go above 1.0.
+static void apply_gain(opus_int16 *samples, int count) {
+    if (gain_percent == 100) {
+        return;
+    }
+    const int gain = gain_percent;
+    for (int i = 0; i < count; i++) {
+        int v = ((int)samples[i] * gain) / 100;
+        if (v > 32767) {
+            v = 32767;
+        } else if (v < -32768) {
+            v = -32768;
+        }
+        samples[i] = (opus_int16)v;
+    }
+}
 
 static int n3ds_renderer_init(int audioConfiguration,
                               POPUS_MULTISTREAM_CONFIGURATION opusConfig,
@@ -118,6 +141,8 @@ static void n3ds_renderer_decode_and_play_sample(char *data, int length) {
         fprintf(stderr, "Opus error from decode: %d\n", decodeLen);
         return;
     }
+    apply_gain((opus_int16 *)audio_wave_buf[wave_buf_idx].data_vaddr,
+               decodeLen * channelCount);
     DSP_FlushDataCache(audio_wave_buf[wave_buf_idx].data_vaddr,
                        decodeLen * channelCount * sizeof(short));
     audio_wave_buf[wave_buf_idx].nsamples = decodeLen;

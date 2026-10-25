@@ -20,6 +20,7 @@
 #include "N3dsRenderer.hpp"
 #include "../../system/debug_console.hpp"
 #include "../../system/apt_state.hpp"
+#include "../../system/n3ds_connection.hpp"
 #include "vshader_shbin.h"
 
 #include <3ds.h>
@@ -34,10 +35,64 @@
 STEREO_3D_MODE N3dsRendererBase::stereo_mode = STEREO_3D_OFF;
 bool N3dsRendererBase::stereo_swap_eyes = false;
 
+volatile int N3dsRendererBase::last_frame_number = -1;
+volatile u32 N3dsRendererBase::frames_lost = 0;
+volatile u32 N3dsRendererBase::host_latency_sum = 0;
+volatile u32 N3dsRendererBase::host_latency_max = 0;
+volatile u32 N3dsRendererBase::host_latency_count = 0;
+
 void N3dsRendererBase::set_stereo_options(STEREO_3D_MODE mode,
                                           bool swap_eyes) {
     stereo_mode = mode;
     stereo_swap_eyes = swap_eyes;
+}
+
+void N3dsRendererBase::note_frame(int frame_number,
+                                  unsigned host_latency_01ms) {
+    // moonlight-common-c numbers frames consecutively and drops the ones it
+    // could not repair with FEC, so a gap is a frame lost on the network.
+    if (last_frame_number >= 0 && frame_number > last_frame_number + 1) {
+        frames_lost += (u32)(frame_number - last_frame_number - 1);
+    }
+    last_frame_number = frame_number;
+    if (host_latency_01ms > 0) {
+        host_latency_sum += host_latency_01ms;
+        host_latency_count++;
+        if (host_latency_01ms > host_latency_max) {
+            host_latency_max = host_latency_01ms;
+        }
+    }
+}
+
+void N3dsRendererBase::draw_connection_marker() {
+    auto listener = N3dsConnectionListener::get_instance();
+    if (listener == nullptr || !listener->connection_is_poor()) {
+        return;
+    }
+    // Yellow square with a dark border in the top-right corner. The
+    // framebuffer is column-major: pixel (x, y) lives at
+    // (x * height + (height - 1 - y)).
+    const int size = 12, margin = 5;
+    const u16 yellow = 0xFFE0, dark = 0x2104;
+    gfx3dSide_t sides[2] = {GFX_LEFT, GFX_RIGHT};
+    int side_count = gfxIs3D() ? 2 : 1;
+    for (int s = 0; s < side_count; s++) {
+        u16 fb_h = 0, fb_w = 0;
+        u16 *fb = (u16 *)gfxGetFramebuffer(GFX_TOP, sides[s], &fb_h, &fb_w);
+        if (fb == NULL || fb_h == 0 || fb_w == 0) {
+            continue;
+        }
+        // gfxGetFramebuffer reports (240, 400 or 800): fb_h is the column
+        // height and fb_w the screen width.
+        int x0 = fb_w - margin - size, y0 = margin;
+        for (int x = x0; x < x0 + size; x++) {
+            for (int y = y0; y < y0 + size; y++) {
+                bool border = x == x0 || x == x0 + size - 1 || y == y0 ||
+                              y == y0 + size - 1;
+                fb[x * fb_h + (fb_h - 1 - y)] = border ? dark : yellow;
+            }
+        }
+    }
 }
 
 N3dsRendererBase::N3dsRendererBase(gfxScreen_t screen_in, int surface_width_in,
@@ -129,18 +184,37 @@ inline void N3dsRendererBase::log_perf_counters() {
     } else {
         snprintf(rtt_str, sizeof(rtt_str), "n/a");
     }
+    // Host-side latency (capture to send) and network losses come from the
+    // receive thread via note_frame()
+    u32 lost = frames_lost;
+    u32 hl_sum = host_latency_sum, hl_max = host_latency_max,
+        hl_count = host_latency_count;
+    frames_lost = 0;
+    host_latency_sum = host_latency_max = host_latency_count = 0;
+    char host_str[40];
+    if (hl_count > 0) {
+        snprintf(host_str, sizeof(host_str), "avg %5.1f  max %5.1f ms",
+                 hl_sum / (double)hl_count / 10.0, hl_max / 10.0);
+    } else {
+        snprintf(host_str, sizeof(host_str), "not reported");
+    }
+
     // The RTT is moonlight-common-c's estimate from the ENet control channel,
     // whose acks are serviced on a coarse timer on the 3DS; it reads far
     // higher than an ICMP ping and is only useful for spotting changes.
+    // "lost" counts frames the network dropped beyond FEC repair; the 3DS
+    // never drops a frame it received.
     DebugConsole::set_stats(
-        "%.0f fps  %dx%d  ctrl rtt %s\n"
+        "%.0f fps  %dx%d  lost %lu  rtt %s\n"
         "decode  avg %5.1f  max %5.1f ms\n"
-        "present avg %5.1f  max %5.1f ms",
-        perf_log_frames / elapsed_s, image_width, image_height, rtt_str,
+        "present avg %5.1f  max %5.1f ms\n"
+        "host    %s",
+        perf_log_frames / elapsed_s, image_width, image_height,
+        (unsigned long)lost, rtt_str,
         (perf_log_decode_sum / (double)perf_log_frames) * ms_per_tick,
         perf_log_decode_max * ms_per_tick,
         (perf_log_fbcopy_sum / (double)perf_log_frames) * ms_per_tick,
-        perf_log_fbcopy_max * ms_per_tick);
+        perf_log_fbcopy_max * ms_per_tick, host_str);
 
     perf_log_last_ticks = now;
     perf_log_frames = 0;
@@ -445,6 +519,9 @@ void N3dsRendererBase::write_px_to_framebuffer_gpu(
     perf_fbcopy_ticks = svcGetSystemTick() - start_ticks;
     if (debug) {
         log_perf_counters();
+    }
+    if (screen == GFX_TOP) {
+        draw_connection_marker();
     }
 
     gfxScreenSwapBuffers(screen, true);
