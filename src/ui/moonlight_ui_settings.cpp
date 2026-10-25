@@ -590,11 +590,23 @@ void MoonlightUi::settings_draw_bottom() {
                 case SettingRow::Choice:
                 case SettingRow::Number: {
                     std::string v = row.value ? row.value() : "";
-                    v = ellipsize(v, 0.4f, 150.0f);
+                    // Use everything right of the label; shrink the font
+                    // before resorting to an ellipsis so long preset names
+                    // stay readable.
+                    float label_w = text_width(row.label, 0.44f);
+                    float avail = LIST_W - 14.0f - label_w - 12.0f - 12.0f;
+                    if (row.type == SettingRow::Choice) {
+                        avail -= 36.0f; // chevrons
+                    }
+                    float vs = 0.4f;
+                    if (text_width(v, vs) > avail) {
+                        vs = 0.34f;
+                    }
+                    v = ellipsize(v, vs, avail);
                     float vx = LIST_X + LIST_W - 12.0f;
                     if (row.type == SettingRow::Choice) {
                         // chevrons
-                        float vw = text_width(v, 0.4f);
+                        float vw = text_width(v, vs);
                         float cyc = y + h / 2.0f;
                         u32 c = sel ? color::text : color::text_faint;
                         triangle(vx - 4, cyc, vx - 10, cyc - 5, vx - 10, cyc + 5, c);
@@ -602,7 +614,7 @@ void MoonlightUi::settings_draw_bottom() {
                                  vx - vw - 16, cyc + 5, c);
                         vx -= 14.0f;
                     }
-                    text(v, vx, y + (h - line_height(0.4f)) / 2.0f, 0.4f,
+                    text(v, vx, y + (h - line_height(vs)) / 2.0f, vs,
                          sel ? color::accent_text : color::text_dim,
                          C2D_AlignRight);
                     break;
