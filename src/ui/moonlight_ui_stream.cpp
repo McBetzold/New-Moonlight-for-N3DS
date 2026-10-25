@@ -26,6 +26,7 @@
 #include "../audio/audio.h"
 #include "../input/n3ds_input.hpp"
 #include "../input/touch/TouchHandler.hpp"
+#include "../system/apt_state.hpp"
 #include "../system/n3ds_connection.hpp"
 #include "../video/video.hpp"
 #include "stream_session.hpp"
@@ -246,6 +247,14 @@ void MoonlightUi::run_stream(const std::shared_ptr<HostEntry> &host,
 
     if (quit_) {
         return;
+    }
+
+    if (apt_state_take_home_request()) {
+        // HOME was pressed during the stream: show the launcher, then do the
+        // jump the input thread deferred. Returns when the user comes back.
+        render(nullptr);
+        aptJumpToHomeMenu();
+        input_reset();
     }
 
     if (connect_status == 0 && cfg->quitappafter) {
