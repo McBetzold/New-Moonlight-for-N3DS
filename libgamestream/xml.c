@@ -53,12 +53,16 @@ static void XMLCALL _xml_start_applist_element(void *userData, const char *name,
 
     app->id = 0;
     app->name = NULL;
+    app->uuid = NULL;
+    app->idx = -1;
     app->next = (PAPP_LIST) search->data;
     search->data = app;
-  } else if (strcmp("ID", name) == 0 || strcmp("AppTitle", name) == 0) {
-    search->memory = malloc(1);
+  } else if (strcmp("ID", name) == 0 || strcmp("AppTitle", name) == 0 ||
+             strcmp("UUID", name) == 0 || strcmp("IDX", name) == 0) {
+    // Zeroed so an empty element (<UUID></UUID>) reads as "" rather than junk
+    search->memory = calloc(1, 1);
     search->size = 0;
-    search->start = 1;
+    search->start = search->memory != NULL;
   }
 }
 
@@ -74,9 +78,91 @@ static void XMLCALL _xml_end_applist_element(void *userData, const char *name) {
         free(search->memory);
     } else if (strcmp("AppTitle", name) == 0) {
         list->name = search->memory;
+    } else if (strcmp("UUID", name) == 0) {
+        free(list->uuid);
+        list->uuid = search->memory;
+    } else if (strcmp("IDX", name) == 0) {
+        list->idx = atoi(search->memory);
+        free(search->memory);
+    } else {
+        free(search->memory);
     }
+    search->memory = NULL;
     search->start = 0;
   }
+}
+
+/* xml_search_all: every element with the wanted name is appended to a list */
+struct xml_multi {
+  const char *node;
+  int recording;
+  char *memory;
+  size_t size;
+  char **results;
+  int count;
+};
+
+static void XMLCALL _xml_start_multi_element(void *userData, const char *name, const char **atts) {
+  struct xml_multi *m = (struct xml_multi*) userData;
+  if (strcmp(m->node, name) == 0) {
+    m->memory = calloc(1, 1);
+    m->size = 0;
+    m->recording = m->memory != NULL;
+  }
+}
+
+static void XMLCALL _xml_end_multi_element(void *userData, const char *name) {
+  struct xml_multi *m = (struct xml_multi*) userData;
+  if (m->recording && strcmp(m->node, name) == 0) {
+    char **grown = realloc(m->results, sizeof(char*) * (m->count + 1));
+    if (grown == NULL) {
+      free(m->memory);
+    } else {
+      m->results = grown;
+      m->results[m->count++] = m->memory;
+    }
+    m->memory = NULL;
+    m->recording = 0;
+  }
+}
+
+static void XMLCALL _xml_multi_data(void *userData, const XML_Char *s, int len) {
+  struct xml_multi *m = (struct xml_multi*) userData;
+  if (!m->recording)
+    return;
+  char *grown = realloc(m->memory, m->size + len + 1);
+  if (grown == NULL)
+    return;
+  m->memory = grown;
+  memcpy(m->memory + m->size, s, len);
+  m->size += len;
+  m->memory[m->size] = 0;
+}
+
+int xml_search_all(char* data, size_t len, const char* node, char*** results, int* count) {
+  struct xml_multi m = {0};
+  m.node = node;
+  *results = NULL;
+  *count = 0;
+  XML_Parser parser = XML_ParserCreate("UTF-8");
+  XML_SetUserData(parser, &m);
+  XML_SetElementHandler(parser, _xml_start_multi_element, _xml_end_multi_element);
+  XML_SetCharacterDataHandler(parser, _xml_multi_data);
+  if (! XML_Parse(parser, data, len, 1)) {
+    int code = XML_GetErrorCode(parser);
+    gs_error = XML_ErrorString(code);
+    XML_ParserFree(parser);
+    for (int i = 0; i < m.count; i++)
+      free(m.results[i]);
+    free(m.results);
+    free(m.memory);
+    return GS_INVALID;
+  }
+  XML_ParserFree(parser);
+  free(m.memory);
+  *results = m.results;
+  *count = m.count;
+  return GS_OK;
 }
 
 static void XMLCALL _xml_start_mode_element(void *userData, const char *name, const char **atts) {

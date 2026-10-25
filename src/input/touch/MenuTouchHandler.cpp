@@ -22,7 +22,8 @@
 #include <memory>
 #include <vector>
 
-static const int button_size_y = 60;
+// Five rows of two buttons; must match 3ds/gfx/menu.png
+static const int button_size_y = 48;
 static const int button_size_x = 160;
 
 // Map the Row and Column numbers of each button to their corresponding
@@ -31,7 +32,9 @@ static std::map<int, std::map<int, N3dsTouchType>> button_map{
     {0, {{0, N3dsTouchType::GAMEPAD}, {1, N3dsTouchType::MOUSEPAD}}},
     {1, {{0, N3dsTouchType::KEYBOARD}, {1, N3dsTouchType::ABSOLUTE_TOUCH}}},
     {2, {{0, N3dsTouchType::DS_TOUCH}, {1, N3dsTouchType::MAGNIFY_TOUCH}}},
-    {3, {{0, N3dsTouchType::DEBUG_TOUCH}, {1, N3dsTouchType::DISABLED}}},
+    {3, {{0, N3dsTouchType::SERVER_CMD_TOUCH}, {1, N3dsTouchType::DEBUG_TOUCH}}},
+    // Exit spans the whole bottom row
+    {4, {{0, N3dsTouchType::DISABLED}, {1, N3dsTouchType::DISABLED}}},
 };
 
 // HOME stays disallowed while streaming; N3dsInput turns a rejected HOME

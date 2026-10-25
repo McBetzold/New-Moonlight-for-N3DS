@@ -28,6 +28,7 @@
 #include "../input/touch/TouchHandler.hpp"
 #include "../system/apt_state.hpp"
 #include "../system/n3ds_connection.hpp"
+#include "../system/server_commands.hpp"
 #include "../video/video.hpp"
 #include "stream_session.hpp"
 
@@ -89,6 +90,18 @@ void MoonlightUi::launch_app(int index) {
         }
     }
 
+    // Apollo refuses the launch outright without this permission; explain it
+    // instead of showing its bare "Permission denied".
+    if (host->server_valid && host->server.isApollo &&
+        !(host->server.permission & APOLLO_PERM_LAUNCH)) {
+        show_error("Not allowed to launch apps",
+                   "Apollo gives new clients view-only access. On the PIN "
+                   "tab of Apollo's web UI, find \"New 3DS\" and enable "
+                   "Launch Apps, plus the controller, mouse and keyboard "
+                   "input permissions you want.");
+        return;
+    }
+
     config_->stream.supportedVideoFormats = VIDEO_FORMAT_H264;
 
     // Phase 1: ask the host to launch (or resume) the app.
@@ -96,11 +109,14 @@ void MoonlightUi::launch_app(int index) {
     auto error = std::make_shared<std::string>();
     PCONFIGURATION cfg = config_;
     int app_id = app.id;
-    auto job = Worker::instance().post([host, cfg, app_id, status, error] {
+    std::string app_uuid = app.uuid;
+    auto job = Worker::instance().post([host, cfg, app_id, app_uuid, status,
+                                        error] {
         http_set_timeout_s(30);
         gs_set_host_display_mode(cfg->host_width, cfg->host_height);
-        *status = gs_start_app(&host->server, &cfg->stream, app_id, cfg->sops,
-                               cfg->localaudio, 1);
+        *status = gs_start_app(&host->server, &cfg->stream, app_id,
+                               app_uuid.c_str(), cfg->sops, cfg->localaudio,
+                               1);
         http_set_timeout_s(60);
         if (*status != GS_OK) {
             *error = gs_error ? gs_error : "";
@@ -157,6 +173,16 @@ void MoonlightUi::run_stream(const std::shared_ptr<HostEntry> &host,
     }
     // Read by the top-screen renderer, which is created once video starts
     N3dsRendererBase::set_stereo_options(cfg->stereo_3d, cfg->swap_eyes);
+    // Apollo's server commands, shown by the stream menu's Commands view
+    {
+        std::vector<std::string> cmds;
+        for (int i = 0; i < host->server.serverCmdCount; i++) {
+            if (host->server.serverCmds[i]) {
+                cmds.push_back(host->server.serverCmds[i]);
+            }
+        }
+        ServerCommands::set(cmds);
+    }
 
     N3dsConnectionListener *listener =
         N3dsConnectionListener::create_instance(cfg->motion_controls);

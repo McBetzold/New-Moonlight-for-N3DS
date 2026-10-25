@@ -1,0 +1,80 @@
+--- a/src/ControlStream.c
++++ b/src/ControlStream.c
+@@ -140,6 +140,11 @@
+ #define IDX_SET_MOTION_EVENT 10
+ #define IDX_SET_RGB_LED 11
+ #define IDX_DS_ADAPTIVE_TRIGGERS 12
++// Apollo protocol extension (ClassicOldSong/Apollo): run a host-defined command
++#define IDX_EXEC_SERVER_CMD 13
++#ifndef CTRL_CHANNEL_SERVERCTL
++#define CTRL_CHANNEL_SERVERCTL 0x08
++#endif
+ 
+ #define CONTROL_STREAM_TIMEOUT_SEC 10
+ #define CONTROL_STREAM_LINGER_TIMEOUT_SEC 2
+@@ -157,6 +162,8 @@
+     -1,     // Rumble triggers (unused)
+     -1,     // Set motion event (unused)
+     -1,     // Set RGB LED (unused)
++    -1,     // Set Adaptive Triggers (unused)
++    -1,     // Execute server command (unused)
+ };
+ static const short packetTypesGen4[] = {
+     0x0606, // Request IDR frame
+@@ -171,6 +178,8 @@
+     -1,     // Rumble triggers (unused)
+     -1,     // Set motion event (unused)
+     -1,     // Set RGB LED (unused)
++    -1,     // Set Adaptive Triggers (unused)
++    -1,     // Execute server command (unused)
+ };
+ static const short packetTypesGen5[] = {
+     0x0305, // Start A
+@@ -185,6 +194,8 @@
+     -1,     // Rumble triggers (unused)
+     -1,     // Set motion event (unused)
+     -1,     // Set RGB LED (unused)
++    -1,     // Set Adaptive Triggers (unused)
++    -1,     // Execute server command (unused)
+ };
+ static const short packetTypesGen7[] = {
+     0x0305, // Start A
+@@ -199,6 +210,8 @@
+     -1,     // Rumble triggers (unused)
+     -1,     // Set motion event (unused)
+     -1,     // Set RGB LED (unused)
++    -1,     // Set Adaptive Triggers (unused)
++    -1,     // Execute server command (unused)
+ };
+ static const short packetTypesGen7Enc[] = {
+     0x0302, // Request IDR frame
+@@ -214,6 +227,7 @@
+     0x5501, // Set motion event (Sunshine protocol extension)
+     0x5502, // Set RGB LED (Sunshine protocol extension)
+     0x5503, // Set Adaptive Triggers (Sunshine protocol extension)
++    0x3000, // Execute server command (Apollo protocol extension)
+ };
+ 
+ static const char requestIdrFrameGen3[] = { 0, 0 };
+@@ -1745,6 +1759,7 @@
+ 
+     return ret;
+ }
++// Apollo protocol extension: ask the host to run the server command with the// given zero-based index in the ServerCommand list it advertised in serverinfo.// Returns non-zero on failure (e.g. no ENet control connection).int LiSendExecServerCmd(uint8_t cmdId) {    uint8_t payload[4] = { cmdId, 0, 0, 0 };    if (!sendMessageAndForget(packetTypes[IDX_EXEC_SERVER_CMD],                              sizeof(payload), payload,                              CTRL_CHANNEL_SERVERCTL,                              ENET_PACKET_FLAG_RELIABLE, false)) {        return LastSocketFail();    }    return 0;}
+ 
+ // Starts the control stream
+ int startControlStream(void) {
+--- a/src/Limelight.h
++++ b/src/Limelight.h
+@@ -569,6 +569,11 @@
+ // This function may only be called between LiStartConnection() and LiStopConnection().
+ bool LiGetEstimatedRttInfo(uint32_t* estimatedRtt, uint32_t* estimatedRttVariance);
+ 
++// Apollo protocol extension: runs the host-defined server command with the given
++// zero-based index (the order of the ServerCommand elements in serverinfo). Only
++// valid between LiStartConnection() and LiStopConnection(); returns 0 on success.
++int LiSendExecServerCmd(uint8_t cmdId);
++
+ // This function queues a relative mouse move event to be sent to the remote server.
+ int LiSendMouseMoveEvent(short deltaX, short deltaY);
+ 

@@ -42,6 +42,8 @@ enum class N3dsTouchType {
     MAGNIFY_TOUCH,
     MENU_TOUCH,
     DEBUG_TOUCH,
+    // List of the host's server commands (Apollo); tapping one runs it
+    SERVER_CMD_TOUCH,
 };
 class TouchStateChangedMsg : public IMessage {
   public:
