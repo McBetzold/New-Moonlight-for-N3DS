@@ -358,7 +358,8 @@ void MoonlightUi::draw_toast() {
 void MoonlightUi::modal_button_rect(const Modal &m, int index, float &x,
                                     float &y, float &w, float &h) const {
     int n = (int)m.buttons.size();
-    if (n <= 2) {
+    bool two_line = !m.subtitles.empty();
+    if (n <= 2 && !m.list) {
         float gap = 12.0f;
         w = (BOT_W - 40.0f - (n - 1) * gap) / (float)n;
         h = 44.0f;
@@ -370,8 +371,9 @@ void MoonlightUi::modal_button_rect(const Modal &m, int index, float &x,
         const float margin = 12.0f;
         const float avail = BOT_H - 2.0f * margin;
         float gap = n > 4 ? 6.0f : 8.0f;
-        h = std::min(36.0f, (avail - (n - 1) * gap) / (float)n);
-        w = 232.0f;
+        float preferred = two_line ? 46.0f : 36.0f;
+        h = std::min(preferred, (avail - (n - 1) * gap) / (float)n);
+        w = two_line ? 288.0f : 232.0f;
         x = (BOT_W - w) / 2.0f;
         float total = n * h + (n - 1) * gap;
         y = margin + (avail - total) / 2.0f + index * (h + gap);
@@ -437,9 +439,37 @@ void MoonlightUi::draw_modal_bottom(const Modal &m) {
             rrect(x - 2, y - 2, w + 4, h + 4, 8, color::accent_text);
         }
         rrect(x, y, w, h, 6, fill);
-        text(ellipsize(m.buttons[i], 0.48f, w - 16.0f), x + w / 2.0f,
-             y + (h - line_height(0.48f)) / 2.0f, 0.48f, color::text,
-             C2D_AlignCenter);
+
+        std::string subtitle =
+            i < m.subtitles.size() ? m.subtitles[i] : std::string();
+        std::string badge = i < m.badges.size() ? m.badges[i] : std::string();
+        float badge_w = 0.0f;
+        if (!badge.empty()) {
+            float bs = 0.32f;
+            badge_w = text_width(badge, bs) + 14.0f;
+            float bh = line_height(bs) + 4.0f;
+            u32 badge_fill = sel ? color::accent_dim : color::card;
+            u32 badge_text = sel ? color::text : color::text_dim;
+            pill(x + w - badge_w - 8.0f, y + (h - bh) / 2.0f, badge, bs,
+                 badge_fill, badge_text, 7.0f);
+            badge_w += 12.0f;
+        }
+        if (subtitle.empty()) {
+            text(ellipsize(m.buttons[i], 0.48f, w - 16.0f - badge_w),
+                 x + (w - badge_w) / 2.0f, y + (h - line_height(0.48f)) / 2.0f,
+                 0.48f, color::text, C2D_AlignCenter);
+        } else {
+            // Two-line entry: name on top, detail (e.g. the IP) underneath.
+            float ts = 0.46f, ss = 0.34f;
+            float block = line_height(ts) + line_height(ss) - 4.0f;
+            float ty = y + (h - block) / 2.0f;
+            float avail_w = w - 24.0f - badge_w;
+            text(ellipsize(m.buttons[i], ts, avail_w), x + 12.0f, ty, ts,
+                 color::text);
+            text(ellipsize(subtitle, ss, avail_w), x + 12.0f,
+                 ty + line_height(ts) - 4.0f, ss,
+                 sel ? color::accent_text : color::text_dim);
+        }
     }
     if (m.buttons.empty() && !m.busy) {
         text("Press A to continue", BOT_W / 2.0f, 200.0f, 0.4f,
@@ -452,7 +482,7 @@ void MoonlightUi::draw_modal_bottom(const Modal &m) {
 int MoonlightUi::show_modal(Modal &m, const std::function<bool()> &finished) {
     int n = (int)m.buttons.size();
     m.selected = std::max(0, std::min(n - 1, m.selected));
-    bool vertical = n > 2;
+    bool vertical = n > 2 || m.list;
     input_reset();
     while (true) {
         if (!poll()) {
@@ -1032,11 +1062,16 @@ void MoonlightUi::discover_pcs() {
         return;
     }
 
-    std::vector<std::string> items;
+    // Pick list: host name on the button, IP address underneath, and a
+    // badge for the pairing / already-added state.
+    Modal pick;
+    pick.title = "Found " + std::to_string(result->size()) +
+                 (result->size() == 1 ? " PC" : " PCs");
+    pick.message = "Select the PC to add. PCs already in your list are "
+                   "marked.";
+    pick.list = true;
     std::vector<int> existing;
     for (const auto &pc : *result) {
-        std::string label = pc.name.empty() ? pc.address
-                                            : pc.name + " (" + pc.address + ")";
         int idx = -1;
         for (size_t i = 0; i < hosts_.size(); i++) {
             if (hosts_[i]->address == pc.address) {
@@ -1044,19 +1079,19 @@ void MoonlightUi::discover_pcs() {
                 break;
             }
         }
-        if (idx >= 0) {
-            label += " - added";
-        } else if (!pc.paired) {
-            label += " - not paired";
-        }
-        items.push_back(label);
+        pick.buttons.push_back(pc.name.empty() ? "Unnamed PC" : pc.name);
+        pick.subtitles.push_back(pc.address);
+        pick.badges.push_back(idx >= 0      ? "Already added"
+                              : pc.paired ? "Paired"
+                                          : "Not paired");
         existing.push_back(idx);
     }
+    pick.buttons.push_back("Cancel");
+    pick.subtitles.push_back("");
+    pick.badges.push_back("");
 
-    int choice = menu("Found " + std::to_string(result->size()) +
-                          (result->size() == 1 ? " PC" : " PCs"),
-                      items);
-    if (choice < 0) {
+    int choice = show_modal(pick);
+    if (choice < 0 || choice >= (int)result->size()) {
         return;
     }
     if (existing[choice] >= 0) {

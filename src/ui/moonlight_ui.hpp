@@ -112,6 +112,12 @@ struct Modal {
     std::string message;  // wrapped on the top screen
     std::string big_text; // e.g. the pairing PIN
     std::vector<std::string> buttons;
+    // Optional per-button second line (e.g. an IP address) and a small
+    // status badge drawn at the right edge; parallel to `buttons`, empty
+    // strings are skipped.
+    std::vector<std::string> subtitles;
+    std::vector<std::string> badges;
+    bool list = false; // always stack the buttons vertically
     int selected = 0;
     bool busy = false; // show a spinner
     std::string busy_text;
