@@ -26,6 +26,7 @@
 
 static CURL *curl;
 static uint32_t connection_timeout_s = 60;
+static uint32_t connect_timeout_s = 10;
 static int log_level = 0;
 
 static size_t _write_curl(void *contents, size_t size, size_t nmemb,
@@ -79,12 +80,17 @@ void http_set_timeout_s(uint32_t connection_timeout_in) {
     connection_timeout_s = connection_timeout_in;
 }
 
+void http_set_connect_timeout_s(uint32_t connect_timeout_in) {
+    connect_timeout_s = connect_timeout_in;
+}
+
 void http_set_log_level(int log_level_in) { log_level = log_level_in; }
 
 int http_request(char *url, PHTTP_DATA data) {
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, data);
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, connection_timeout_s);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, connect_timeout_s);
     curl_easy_setopt(curl, CURLOPT_VERBOSE, log_level > 0 ? 1L : 0);
 #ifdef __FreeBSD__
     curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
