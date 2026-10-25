@@ -77,6 +77,14 @@ typedef struct _CONFIGURATION {
     STEREO_3D_MODE stereo_3d;
     // Exchange the left- and right-eye pictures in either 3D mode.
     bool swap_eyes;
+    // Audio gain in percent (100 = as sent). The 3DS speakers are quiet.
+    int volume_boost;
+    // Reconnect by itself when a stream drops unexpectedly.
+    bool auto_reconnect;
+    // On start-up, resume the app still running on a paired PC.
+    bool resume_on_start;
+    // Holding START turns the C-stick into a mouse (ZL/ZR click).
+    bool cstick_mouse;
 } CONFIGURATION, *PCONFIGURATION;
 
 const char *stereo_3d_mode_name(STEREO_3D_MODE mode);

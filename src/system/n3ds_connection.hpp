@@ -72,12 +72,15 @@ class N3dsConnectionListener : public ISubscriber {
     bool has_terminated();
     int termination_code();
     std::string termination_message();
+    // moonlight-common-c's verdict on recent packet loss (CONN_STATUS_POOR)
+    bool connection_is_poor();
 
   private:
     static std::unique_ptr<N3dsConnectionListener> instance;
     bool enable_motion;
     AtomicVar<bool> debug = false;
     AtomicVar<bool> connection_closed = false;
+    AtomicVar<bool> connection_poor = false;
 
     AtomicVar<int> stage = STAGE_NONE;
     AtomicVar<int> failed_stage_value = STAGE_NONE;

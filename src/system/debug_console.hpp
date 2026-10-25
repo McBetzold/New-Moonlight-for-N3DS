@@ -26,7 +26,7 @@
 namespace DebugConsole {
 
 // Number of text rows in the status panel (a separator row is added below)
-constexpr int STATS_ROWS = 3;
+constexpr int STATS_ROWS = 4;
 
 // Take over the bottom screen. Called when the debug view is selected.
 void enter();

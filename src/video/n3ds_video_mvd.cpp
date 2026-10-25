@@ -232,6 +232,9 @@ int MvdDecoder::submit_decode_unit(PDECODE_UNIT decodeUnit) {
     PLENTRY entry = decodeUnit->bufferList;
     int length = 0;
 
+    N3dsRendererBase::note_frame(decodeUnit->frameNumber,
+                                 decodeUnit->frameHostProcessingLatency);
+
     // Blocks only if the decoder has fallen MVD_FRAME_QUEUE_DEPTH frames
     // behind, which is the same back-pressure the old synchronous path applied
     // on every single frame.

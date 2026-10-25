@@ -375,6 +375,32 @@ void MoonlightUi::settings_build() {
     toggle("Play audio on host PC",
            "Keeps the sound on the PC instead of streaming it to the 3DS.",
            &cfg->localaudio);
+    {
+        SettingRow r;
+        r.type = SettingRow::Slider;
+        r.label = "Volume boost";
+        r.desc = "Makes the stream louder than the PC sends it; the 3DS "
+                 "speakers are quiet. Loud passages start to distort above "
+                 "about 200%. Press A for an exact value.";
+        r.value = [cfg] { return std::to_string(cfg->volume_boost) + "%"; };
+        r.fraction = [cfg] { return (cfg->volume_boost - 100) / 300.0f; };
+        r.set_fraction = [cfg](float f) {
+            f = std::max(0.0f, std::min(1.0f, f));
+            int v = 100 + (int)(f * 300.0f + 12.5f) / 25 * 25;
+            cfg->volume_boost = std::max(100, std::min(400, v));
+        };
+        r.adjust = [cfg](int dir) {
+            cfg->volume_boost =
+                std::max(100, std::min(400, cfg->volume_boost + dir * 25));
+        };
+        r.activate = [this, cfg] {
+            int v = cfg->volume_boost;
+            if (prompt_number("Volume in percent (100 to 400)", v, v)) {
+                cfg->volume_boost = std::max(100, std::min(400, v));
+            }
+        };
+        rows_.push_back(r);
+    }
 
     header("Host Settings");
     toggle("Optimize game settings",
@@ -385,6 +411,15 @@ void MoonlightUi::settings_build() {
            "Closes the game or app on the PC when the stream ends instead of "
            "leaving it running for a later resume.",
            &cfg->quitappafter);
+    toggle("Reconnect automatically",
+           "When a stream drops because of the network, reconnects to the "
+           "running app by itself a few times before giving up.",
+           &cfg->auto_reconnect);
+    toggle("Resume on start",
+           "When Moonlight opens and one of your PCs still has an app "
+           "running, resumes it right away. Press B during the countdown to "
+           "stay in the launcher.",
+           &cfg->resume_on_start);
 
     header("Input Settings");
     toggle("View-only mode",
@@ -407,6 +442,11 @@ void MoonlightUi::settings_build() {
            "Uses the triggers as left and right mouse clicks, which pairs well "
            "with the touchpad view.",
            &cfg->use_triggers_for_mouse);
+    toggle("Hold START for mouse",
+           "Holding START for a second switches the C-stick to moving the "
+           "mouse, with ZL and ZR as its buttons. Hold START again to go "
+           "back.",
+           &cfg->cstick_mouse);
 
     header("Advanced Settings");
     {

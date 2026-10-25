@@ -160,6 +160,7 @@ void MoonlightUi::run_stream(const std::shared_ptr<HostEntry> &host,
 
     AUDIO_RENDERER_CALLBACKS *audio_callbacks =
         cfg->localaudio ? &audio_callbacks_mock : &audio_callbacks_n3ds;
+    n3ds_audio_set_gain_percent(cfg->volume_boost);
     PDECODER_RENDERER_CALLBACKS video_callbacks = &decoder_callbacks_mock;
     switch (cfg->video_decoder) {
     case VIDEO_DECODER_TYPE::HARDWARE_VIDEO_DECODER:

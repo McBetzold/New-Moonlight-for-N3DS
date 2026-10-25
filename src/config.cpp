@@ -57,6 +57,10 @@ static struct option long_options[] = {
     {"host_height", required_argument, NULL, 'E'},
     {"stereo_3d", required_argument, NULL, 'F'},
     {"swap_eyes", required_argument, NULL, 'G'},
+    {"volume_boost", required_argument, NULL, 'H'},
+    {"auto_reconnect", required_argument, NULL, 'I'},
+    {"resume_on_start", required_argument, NULL, 'J'},
+    {"cstick_mouse", required_argument, NULL, 'K'},
     {0, 0, 0, 0},
 };
 
@@ -162,6 +166,22 @@ void parse_argument(int c, char *value, PCONFIGURATION config) {
     case 'G':
         config->swap_eyes = ((value != NULL) && (strcmp(value, "true") == 0));
         break;
+    case 'H': {
+        int v = value != NULL ? atoi(value) : 100;
+        config->volume_boost = v < 100 ? 100 : v > 400 ? 400 : v;
+        break;
+    }
+    case 'I':
+        config->auto_reconnect =
+            ((value != NULL) && (strcmp(value, "true") == 0));
+        break;
+    case 'J':
+        config->resume_on_start =
+            ((value != NULL) && (strcmp(value, "true") == 0));
+        break;
+    case 'K':
+        config->cstick_mouse = ((value != NULL) && (strcmp(value, "true") == 0));
+        break;
     case 1:
         if (config->action == NULL)
             config->action = value;
@@ -226,6 +246,10 @@ void config_save(char *filename, PCONFIGURATION config) {
     write_config_string(fd, "stereo_3d",
                         stereo_3d_mode_name(config->stereo_3d));
     write_config_bool(fd, "swap_eyes", config->swap_eyes);
+    write_config_int(fd, "volume_boost", config->volume_boost);
+    write_config_bool(fd, "auto_reconnect", config->auto_reconnect);
+    write_config_bool(fd, "resume_on_start", config->resume_on_start);
+    write_config_bool(fd, "cstick_mouse", config->cstick_mouse);
 
     if (strcmp(config->app, "Steam") != 0)
         write_config_string(fd, "app", config->app);
@@ -270,6 +294,10 @@ void config_parse(int argc, char *argv[], PCONFIGURATION config) {
     config->use_triggers_for_mouse = false;
     config->stereo_3d = STEREO_3D_OFF;
     config->swap_eyes = false;
+    config->volume_boost = 100;
+    config->auto_reconnect = true;
+    config->resume_on_start = false;
+    config->cstick_mouse = true;
 
     config_file_parse(config);
 
