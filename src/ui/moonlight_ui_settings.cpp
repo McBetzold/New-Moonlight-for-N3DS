@@ -49,16 +49,40 @@ struct ResolutionPreset {
     int host_width;
     int host_height;
     const char *label;
+    const char *desc; // shown on the top screen while selected
 };
 
 static const ResolutionPreset PRESETS[] = {
-    {400, 240, 0, 0, "400x240 (Games)"},
-    {800, 480, 0, 0, "800x480 (Desktop)"},
-    {800, 480, 1920, 1152, "800x480 (PC games, 1920x1152 host)"},
-    {640, 480, 0, 0, "640x480 (Bottom-screen views)"},
-    {320, 240, 0, 0, "320x240 (Bottom-screen 1:1)"},
+    {400, 240, 0, 0, "400x240 (Games)",
+     "Pixel-exact on the top screen and the lightest to decode, so the "
+     "smoothest option. Games draw their own interface, so the small desktop "
+     "does not matter."},
+    {800, 480, 0, 0, "800x480 (Desktop)",
+     "The top screen's shape with four times the pixels, scaled down 2:1. "
+     "Best for the Windows desktop and anything with small text."},
+    {800, 480, 1920, 1152, "800x480 (PC games, experimental)",
+     "Streams 800x480 but asks the host for a 1920x1152 display, so games "
+     "that refuse tiny screens still run and the host scales the picture "
+     "down. Needs Apollo's virtual display."},
+    // Stretch view: each half is 400x240, i.e. the top screen's exact shape,
+    // and the bottom screen shows the middle 320 of those 400 columns. The
+    // host renders 800x960 so the desktop stays usable.
+    {400, 480, 800, 960, "400x480 (Dual screen, experimental)",
+     "For the Stretch view: each half is exactly the top screen's shape and "
+     "the bottom screen shows the middle 80% of the lower half. The host "
+     "renders 800x960. Needs Apollo's virtual display."},
+    {640, 480, 0, 0, "640x480 (Bottom-screen views)",
+     "Matches the bottom screen's 4:3 shape for the Mirror view. Slightly "
+     "squeezed on the top screen."},
+    {320, 240, 0, 0, "320x240 (Bottom-screen 1:1)",
+     "Pixel-exact on the bottom screen and the lightest of all. The desktop "
+     "becomes very small."},
 };
 static const int PRESET_COUNT = sizeof(PRESETS) / sizeof(PRESETS[0]);
+
+static const char *CUSTOM_RESOLUTION_DESC =
+    "Custom size. Width should be a multiple of 400 or 320 and height of "
+    "240; nothing larger than 1024x512 can be shown. Press A to change it.";
 
 static bool host_mode_set(const CONFIGURATION *cfg) {
     return cfg->host_width > 0 && cfg->host_height > 0;
@@ -169,11 +193,12 @@ void MoonlightUi::settings_build() {
         SettingRow r;
         r.type = SettingRow::Choice;
         r.label = "Resolution";
-        r.desc = "400x240: lightest to decode. 800x480: the top screen's "
-                 "shape with room for the desktop. PC games: streams 800x480 "
-                 "but asks the host for a 1920x1152 display, so games that "
-                 "reject tiny screens run and Apollo scales the picture down. "
-                 "A: custom size.";
+        r.desc = CUSTOM_RESOLUTION_DESC;
+        r.desc_fn = [cfg] {
+            int i = preset_index(cfg);
+            return std::string(i >= 0 ? PRESETS[i].desc
+                                      : CUSTOM_RESOLUTION_DESC);
+        };
         r.value = [cfg] {
             int i = preset_index(cfg);
             if (i >= 0) {
@@ -548,9 +573,11 @@ void MoonlightUi::settings_draw_top() {
         text(row.value(), cx + 16.0f, ty, 0.48f, color::accent_text);
         ty += line_height(0.48f) + 8.0f;
     }
-    if (desc_lines_for_ != sel_row_) {
-        desc_lines_ = wrap(row.desc, 0.4f, cw - 32.0f);
+    std::string desc = row.desc_fn ? row.desc_fn() : row.desc;
+    if (desc_lines_for_ != sel_row_ || desc_cache_text_ != desc) {
+        desc_lines_ = wrap(desc, 0.4f, cw - 32.0f);
         desc_lines_for_ = sel_row_;
+        desc_cache_text_ = desc;
     }
     auto lines = desc_lines_;
     if (lines.size() > 4) {
