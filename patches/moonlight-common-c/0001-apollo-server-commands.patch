@@ -56,14 +56,29 @@
  };
  
  static const char requestIdrFrameGen3[] = { 0, 0 };
-@@ -1745,6 +1759,7 @@
- 
+@@ -1746,6 +1760,22 @@
      return ret;
  }
-+// Apollo protocol extension: ask the host to run the server command with the// given zero-based index in the ServerCommand list it advertised in serverinfo.// Returns non-zero on failure (e.g. no ENet control connection).int LiSendExecServerCmd(uint8_t cmdId) {    uint8_t payload[4] = { cmdId, 0, 0, 0 };    if (!sendMessageAndForget(packetTypes[IDX_EXEC_SERVER_CMD],                              sizeof(payload), payload,                              CTRL_CHANNEL_SERVERCTL,                              ENET_PACKET_FLAG_RELIABLE, false)) {        return LastSocketFail();    }    return 0;}
  
++// Apollo protocol extension: ask the host to run the server command with the
++// given zero-based index in the ServerCommand list it advertised in serverinfo.
++// Returns non-zero on failure (e.g. no ENet control connection).
++int LiSendExecServerCmd(uint8_t cmdId) {
++    uint8_t payload[4] = { cmdId, 0, 0, 0 };
++
++    if (!sendMessageAndForget(packetTypes[IDX_EXEC_SERVER_CMD],
++                              sizeof(payload), payload,
++                              CTRL_CHANNEL_SERVERCTL,
++                              ENET_PACKET_FLAG_RELIABLE, false)) {
++        return LastSocketFail();
++    }
++
++    return 0;
++}
++
  // Starts the control stream
  int startControlStream(void) {
+     int err;
 --- a/src/Limelight.h
 +++ b/src/Limelight.h
 @@ -569,6 +569,11 @@
