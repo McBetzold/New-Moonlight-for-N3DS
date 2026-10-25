@@ -30,7 +30,7 @@ namespace boxart {
 
 static const char *CACHE_ROOT = MOONLIGHT_3DS_PATH "/boxart";
 // Bumped whenever the tiled layout changes so stale SD caches are redone.
-static const u32 CACHE_MAGIC = 0x32415842; // "BXA2"
+static const u32 CACHE_MAGIC = 0x33415842; // "BXA3"
 
 struct CacheHeader {
     u32 magic;
@@ -106,18 +106,15 @@ static inline u16 to_rgb565(u8 r, u8 g, u8 b) {
 }
 
 // Packs a 96x128 RGBA8 image (top row first) into the tiled texture.
-// Empirically (checked on hardware) the image drawn with an unrotated
-// sub-texture (top = 1.0, bottom = 0.0) came out rotated 180 degrees when
-// rows were stored bottom-up with x unchanged, so store rows top-down and
-// mirror x within the 96-pixel image region instead.
+// Verified on hardware with the unrotated sub-texture (top = 1.0,
+// bottom = 0.0): rows stored top-down and x unchanged draw correctly.
 static void pack_tiled(const u8 *rgba, std::vector<u8> &tiled) {
     tiled.assign(TILED_BYTES, 0);
     u16 *dst = reinterpret_cast<u16 *>(tiled.data());
     for (int y = 0; y < IMG_H; y++) {
         const u8 *row = rgba + (size_t)y * IMG_W * 4;
         for (int x = 0; x < IMG_W; x++) {
-            int tx = IMG_W - 1 - x;
-            dst[tiled_index(tx, y)] =
+            dst[tiled_index(x, y)] =
                 to_rgb565(row[x * 4], row[x * 4 + 1], row[x * 4 + 2]);
         }
     }
