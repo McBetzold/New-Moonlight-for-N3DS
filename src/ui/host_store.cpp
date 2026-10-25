@@ -83,8 +83,15 @@ std::vector<Record> load() {
         int port = atoi(port_str.c_str());
         r.port = (port > 0 && port < 65536) ? (uint16_t)port : 47989;
         if (tab2 != std::string::npos) {
-            r.name = line.substr(tab2 + 1);
+            size_t tab3 = line.find('\t', tab2 + 1);
+            r.name = line.substr(tab2 + 1, tab3 == std::string::npos
+                                               ? std::string::npos
+                                               : tab3 - tab2 - 1);
             trim(r.name);
+            if (tab3 != std::string::npos) {
+                r.mac = line.substr(tab3 + 1);
+                trim(r.mac);
+            }
         }
         trim(r.address);
         if (!r.address.empty()) {
@@ -100,7 +107,7 @@ void save(const std::vector<Record> &records) {
     if (!fd) {
         return;
     }
-    fprintf(fd, "# address<TAB>port<TAB>name\n");
+    fprintf(fd, "# address<TAB>port<TAB>name<TAB>mac\n");
     for (const auto &r : records) {
         std::string name = r.name;
         for (auto &c : name) {
@@ -108,8 +115,8 @@ void save(const std::vector<Record> &records) {
                 c = ' ';
             }
         }
-        fprintf(fd, "%s\t%u\t%s\n", r.address.c_str(), (unsigned)r.port,
-                name.c_str());
+        fprintf(fd, "%s\t%u\t%s\t%s\n", r.address.c_str(), (unsigned)r.port,
+                name.c_str(), r.mac.c_str());
     }
     fclose(fd);
 }
