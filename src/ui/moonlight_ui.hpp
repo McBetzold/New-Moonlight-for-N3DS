@@ -131,6 +131,13 @@ struct ToolButton {
     bool enabled = true;
 };
 
+// One page of an in-app guide. The body is split into paragraphs at '\n';
+// a paragraph starting with "* " is drawn as a bullet point.
+struct GuidePage {
+    const char *title;
+    const char *body;
+};
+
 class MoonlightUi {
   public:
     explicit MoonlightUi(PCONFIGURATION config);
@@ -143,7 +150,8 @@ class MoonlightUi {
     enum class View { Pcs, Apps, Settings };
 
     struct SettingRow {
-        enum Type { Header, Toggle, Choice, Slider, Number };
+        // Link: opens something (e.g. a guide) when pressed or tapped
+        enum Type { Header, Toggle, Choice, Slider, Number, Link };
         Type type = Header;
         std::string label;
         std::string desc;
@@ -249,6 +257,11 @@ class MoonlightUi {
     int settings_hit(float tx, float ty, float &row_y) const;
     std::string resolution_warning() const;
     void settings_edit_resolution();
+
+    // ---- In-app guides (moonlight_ui_guide.cpp); nested render loop
+    void show_guide(const std::string &title, const GuidePage *pages,
+                    int count);
+    void show_stereo_guide();
 
     PCONFIGURATION config_;
     View view_ = View::Pcs;

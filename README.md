@@ -47,7 +47,7 @@ Apollo (and Sunshine with display-mode changes on) sizes the host display from t
 
 ### 3D
 
-The top screen can show the stream in stereoscopic 3D. Choose a mode under **3D Display** in the settings (`stereo_3d` in `moonlight.conf`), start the stream and raise the 3D slider; lowering it all the way returns to 2D. With the default, `off`, the slider does nothing. Earlier versions split any 800-wide stream in two whenever the slider was up, which garbled ordinary 2D streams.
+The top screen can show the stream in stereoscopic 3D. Choose a mode under **3D Display** in the settings (`stereo_3d` in `moonlight.conf`), start the stream and raise the 3D slider; lowering it all the way returns to 2D. With the default, `off`, the slider does nothing. Earlier versions split any 800-wide stream in two whenever the slider was up, which garbled ordinary 2D streams. The **3D setup guide** entry under 3D Display walks through the PC side on the 3DS itself: games, emulators, videos and how to check the picture.
 
 - **Side-by-side** (`stereo_3d = sbs`) shows real 3D. The PC has to output *half* side-by-side 3D: the left-eye view squeezed into the left half of the picture and the right-eye view into the right half. Moonlight sends each half to its eye. Ways to get that picture on the PC:
     - [ReShade](https://reshade.me) with the SuperDepth3D shader in its side-by-side mode, which works for most DirectX, OpenGL and Vulkan games that expose their depth buffer.
