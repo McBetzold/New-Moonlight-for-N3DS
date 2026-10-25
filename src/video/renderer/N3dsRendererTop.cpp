@@ -31,15 +31,38 @@ N3dsRendererTop::N3dsRendererTop(int dest_width, int dest_height, int src_width,
     : N3dsRendererBase(GFX_TOP, dest_width, dest_height, src_width, src_height,
                        px_size, debug_in) {}
 
+// Share of the picture's width each eye leaves out in flat depth mode with the
+// 3D slider all the way up: about a 10-pixel offset between the two 400-pixel
+// eye pictures.
+static const float FLAT_DEPTH_MAX_CROP = 0.025f;
+
 void N3dsRendererTop::write_px_to_framebuffer(uint8_t *source) {
-    // TODO: Add logic for stretching 400px images to fit 2 400px screen buffers
-    if (osGet3DSliderState() > 0.0 &&
-        surface_width >= GSP_SCREEN_HEIGHT_TOP_2X) {
+    // The slider is read every frame so 3D follows it live.
+    float slider = osGet3DSliderState();
+
+    N3dsStereoView view;
+    if (slider > 0.0f && fb_rows >= GSP_SCREEN_HEIGHT_TOP_2X) {
+        switch (stereo_mode) {
+        case STEREO_3D_SIDE_BY_SIDE:
+            view.enabled = true;
+            break;
+        case STEREO_3D_FLAT_DEPTH:
+            view.enabled = true;
+            view.full_frame = true;
+            view.crop = slider * FLAT_DEPTH_MAX_CROP;
+            break;
+        default:
+            break;
+        }
+    }
+    view.swap = stereo_swap_eyes;
+
+    if (view.enabled) {
         ensure_3d_enabled();
     } else {
         ensure_3d_disabled();
     }
-    write_px_to_framebuffer_gpu(source);
+    write_px_to_framebuffer_gpu(source, view);
 }
 
 void N3dsRendererTop::set_perf_decode_ticks(u64 ticks) {

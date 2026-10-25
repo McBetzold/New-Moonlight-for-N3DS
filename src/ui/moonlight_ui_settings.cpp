@@ -277,6 +277,42 @@ void MoonlightUi::settings_build() {
         rows_.push_back(r);
     }
 
+    header("3D Display");
+    {
+        SettingRow r;
+        r.type = SettingRow::Choice;
+        r.label = "3D mode";
+        r.desc = "Side-by-side: the PC sends half side-by-side 3D (ReShade "
+                 "SuperDepth3D, an emulator's SBS mode) and each half goes to "
+                 "one eye. Flat depth: sets any 2D picture back behind the "
+                 "screen. The 3D slider turns it on.";
+        r.value = [cfg] {
+            switch (cfg->stereo_3d) {
+            case STEREO_3D_SIDE_BY_SIDE:
+                return std::string("Side-by-side");
+            case STEREO_3D_FLAT_DEPTH:
+                return std::string("Flat depth");
+            default:
+                return std::string("Off");
+            }
+        };
+        r.adjust = [cfg](int dir) {
+            int v = ((int)cfg->stereo_3d + dir + STEREO_3D_MODE_COUNT) %
+                    STEREO_3D_MODE_COUNT;
+            cfg->stereo_3d = (STEREO_3D_MODE)v;
+        };
+        r.activate = [cfg] {
+            cfg->stereo_3d = (STEREO_3D_MODE)(((int)cfg->stereo_3d + 1) %
+                                              STEREO_3D_MODE_COUNT);
+        };
+        rows_.push_back(r);
+    }
+    toggle("Swap eyes",
+           "Gives each eye the other eye's picture. Turn it on if "
+           "side-by-side 3D looks inside out. In flat depth mode it brings "
+           "the picture out in front of the screen instead.",
+           &cfg->swap_eyes);
+
     header("Audio Settings");
     toggle("Play audio on host PC",
            "Keeps the sound on the PC instead of streaming it to the 3DS.",

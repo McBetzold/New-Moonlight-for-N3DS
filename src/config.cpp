@@ -55,8 +55,41 @@ static struct option long_options[] = {
     {"usetriggersformouse", required_argument, NULL, 'C'},
     {"host_width", required_argument, NULL, 'D'},
     {"host_height", required_argument, NULL, 'E'},
+    {"stereo_3d", required_argument, NULL, 'F'},
+    {"swap_eyes", required_argument, NULL, 'G'},
     {0, 0, 0, 0},
 };
+
+// Names used in moonlight.conf, indexed by STEREO_3D_MODE
+static const char *stereo_3d_names[STEREO_3D_MODE_COUNT] = {"off", "sbs",
+                                                            "depth"};
+
+const char *stereo_3d_mode_name(STEREO_3D_MODE mode) {
+    int i = (int)mode;
+    if (i < 0 || i >= STEREO_3D_MODE_COUNT) {
+        i = STEREO_3D_OFF;
+    }
+    return stereo_3d_names[i];
+}
+
+static STEREO_3D_MODE parse_stereo_3d(const char *value) {
+    if (value == NULL) {
+        return STEREO_3D_OFF;
+    }
+    for (int i = 0; i < STEREO_3D_MODE_COUNT; i++) {
+        if (strcmp(value, stereo_3d_names[i]) == 0) {
+            return (STEREO_3D_MODE)i;
+        }
+    }
+    if (strcmp(value, "side_by_side") == 0) {
+        return STEREO_3D_SIDE_BY_SIDE;
+    }
+    int n = atoi(value);
+    if (n > 0 && n < STEREO_3D_MODE_COUNT) {
+        return (STEREO_3D_MODE)n;
+    }
+    return STEREO_3D_OFF;
+}
 
 void parse_argument(int c, char *value, PCONFIGURATION config) {
     switch (c) {
@@ -123,6 +156,12 @@ void parse_argument(int c, char *value, PCONFIGURATION config) {
     case 'E':
         config->host_height = value != NULL ? atoi(value) : 0;
         break;
+    case 'F':
+        config->stereo_3d = parse_stereo_3d(value);
+        break;
+    case 'G':
+        config->swap_eyes = ((value != NULL) && (strcmp(value, "true") == 0));
+        break;
     case 1:
         if (config->action == NULL)
             config->action = value;
@@ -184,6 +223,9 @@ void config_save(char *filename, PCONFIGURATION config) {
     write_config_bool(fd, "usetriggersformouse",
                       config->use_triggers_for_mouse);
     write_config_bool(fd, "motion_controls", config->motion_controls);
+    write_config_string(fd, "stereo_3d",
+                        stereo_3d_mode_name(config->stereo_3d));
+    write_config_bool(fd, "swap_eyes", config->swap_eyes);
 
     if (strcmp(config->app, "Steam") != 0)
         write_config_string(fd, "app", config->app);
@@ -226,6 +268,8 @@ void config_parse(int argc, char *argv[], PCONFIGURATION config) {
     config->swap_face_buttons = false;
     config->swap_triggers_and_shoulders = false;
     config->use_triggers_for_mouse = false;
+    config->stereo_3d = STEREO_3D_OFF;
+    config->swap_eyes = false;
 
     config_file_parse(config);
 

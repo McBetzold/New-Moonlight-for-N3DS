@@ -34,7 +34,7 @@ After modding your 3DS and installing the Moonlight CIA, open the Moonlight appl
 
 ### Settings
 
-Press `START` or tap the gear icon to open the settings page. It is grouped like the PC client (Basic, Audio, Host, Input, Advanced): left/right adjusts the highlighted value, `A` toggles it or opens a keyboard for an exact value, and `B` saves and goes back. The top screen explains what the highlighted setting does and warns about stream sizes the 3DS cannot display.
+Press `START` or tap the gear icon to open the settings page. It is grouped like the PC client (Basic, 3D Display, Audio, Host, Input, Advanced): left/right adjusts the highlighted value, `A` toggles it or opens a keyboard for an exact value, and `B` saves and goes back. The top screen explains what the highlighted setting does and warns about stream sizes the 3DS cannot display.
 
 ## Configuration
 
@@ -44,6 +44,20 @@ The default settings are recommended for \*New\* 3DS users. The PC list is store
 ### PC games that refuse a tiny display
 
 Apollo (and Sunshine with display-mode changes on) sizes the host display from the resolution in the launch request, so a plain 800x480 or 400x240 stream gives Windows and the game an 800x480 or 400x240 monitor. Many games refuse to start on that or fall back to a window. The **PC games (800x480, 1920x1152 host)** preset keeps the 800x480 stream but asks the host for a 1920x1152 display, the same 5:3 shape as the top screen; Apollo creates its virtual display at that size and scales the picture down, so the game sees a normal monitor and nothing changes on the 3DS. The request also carries `virtualDisplay=1`, so Apollo uses a virtual display even if the app is not configured for one (Sunshine ignores it). The same host size can be typed after the stream size when entering a custom resolution, and in `moonlight.conf` it is `host_width = 1920` / `host_height = 1152` (0 = same as the stream). Keep the host display the same shape as the stream, or the host adds black bars; the settings page warns when the shapes differ.
+
+### 3D
+
+The top screen can show the stream in stereoscopic 3D. Choose a mode under **3D Display** in the settings (`stereo_3d` in `moonlight.conf`), start the stream and raise the 3D slider; lowering it all the way returns to 2D. With the default, `off`, the slider does nothing. Earlier versions split any 800-wide stream in two whenever the slider was up, which garbled ordinary 2D streams.
+
+- **Side-by-side** (`stereo_3d = sbs`) shows real 3D. The PC has to output *half* side-by-side 3D: the left-eye view squeezed into the left half of the picture and the right-eye view into the right half. Moonlight sends each half to its eye. Ways to get that picture on the PC:
+    - [ReShade](https://reshade.me) with the SuperDepth3D shader in its side-by-side mode, which works for most DirectX, OpenGL and Vulkan games that expose their depth buffer.
+    - geo-11, which renders true two-camera 3D in supported games.
+    - Emulators with a side-by-side stereoscopic output, such as Dolphin and RPCS3.
+    - Side-by-side 3D videos played full screen.
+
+  Stream at 800x480 (the Desktop or PC games preset): each eye then gets a full 400x240 picture with the right shape. A 400-wide stream works too, but each eye only has 200 columns. Full-width side-by-side, where each eye keeps its full width, comes out squashed; pick the half-width variant when a tool offers both.
+- **Flat depth** (`stereo_3d = depth`) works with any stream. Both eyes see the whole picture, slightly offset so it sits behind the screen like a window; the slider sets how far. It does not add depth within the picture.
+- **Swap eyes** (`swap_eyes = true`) gives each eye the other eye's picture. Turn it on if side-by-side 3D looks inside out, with near things appearing far away. In flat depth mode it brings the picture out in front of the screen instead.
 
 ### Performance tips (New 3DS)
 

@@ -18,6 +18,7 @@
  */
 #pragma once
 
+#include "../../config.hpp"
 #include "../../system/AtomicVar.hpp"
 #include "../../system/subscriber.hpp"
 #include <3ds.h>
@@ -38,6 +39,20 @@ class IN3dsRenderer {
     virtual void set_perf_decode_ticks(u64 ticks) = 0;
 };
 
+// How one frame is laid out on the top screen's two eye buffers.
+struct N3dsStereoView {
+    // Present to both eye buffers (the top screen must be in 3D mode).
+    bool enabled = false;
+    // Each eye gets the whole picture (flat depth) instead of one half of a
+    // side-by-side picture.
+    bool full_frame = false;
+    // Flat depth only: share of the picture's width each eye leaves out, the
+    // left eye on the left edge and the right eye on the right edge.
+    float crop = 0.0f;
+    // Send the left-eye picture to the right eye and vice versa.
+    bool swap = false;
+};
+
 class N3dsRendererBase {
   public:
     N3dsRendererBase(gfxScreen_t screen_in, int surface_width_in,
@@ -46,9 +61,15 @@ class N3dsRendererBase {
                      bool debug_in = false);
     virtual ~N3dsRendererBase();
 
+    // 3D options for the top screen. The UI sets them before a stream
+    // starts; the top renderer reads them every frame.
+    static void set_stereo_options(STEREO_3D_MODE mode, bool swap_eyes);
+
   protected:
     inline void log_perf_counters();
-    void write_px_to_framebuffer_gpu(uint8_t *__restrict source);
+    void write_px_to_framebuffer_gpu(
+        uint8_t *__restrict source,
+        const N3dsStereoView &stereo = N3dsStereoView());
     void ensure_3d_enabled();
     void ensure_3d_disabled();
     inline void write24(u8 *p, u32 val);
@@ -68,6 +89,9 @@ class N3dsRendererBase {
     u64 perf_log_fbcopy_sum = 0;
     u64 perf_log_fbcopy_max = 0;
 
+    static STEREO_3D_MODE stereo_mode;
+    static bool stereo_swap_eyes;
+
     gfxScreen_t screen;
     int surface_width;
     int surface_height;
@@ -75,6 +99,9 @@ class N3dsRendererBase {
     int image_height;
     int px_size;
     bool debug;
+    // Rows (screen columns) vramFb can hold. A 3D frame needs 800: the two
+    // 400-column eye pictures are drawn one after the other.
+    int fb_rows;
     u32 *cmdlist = NULL;
     void *vramFb = NULL;
     void *vramTex = NULL;
