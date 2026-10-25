@@ -28,7 +28,7 @@ class N3dsInput : public ISubscriber {
   public:
     N3dsInput(int image_width, int image_height, bool swap_face_buttons,
               bool swap_triggers_and_shoulders, bool use_triggers_for_mouse_in,
-              bool motion_controls_in = false);
+              bool motion_controls_in = false, bool cstick_mouse_in = true);
     ~N3dsInput();
     void accept(IMessage *msg) override;
     void n3dsinput_handle_event();
@@ -55,6 +55,13 @@ class N3dsInput : public ISubscriber {
     bool use_triggers_for_mouse = false;
     bool motion_controls = false;
     bool menu_active = false;
+
+    // Hold START to switch the C-stick between right stick and mouse
+    bool cstick_mouse_enabled = true;
+    bool cstick_mouse_active = false;
+    u64 start_held_since = 0;   // system ticks, 0 = not held
+    bool start_hold_handled = false;
+    float mouse_remainder_x = 0, mouse_remainder_y = 0;
 
     uint32_t CUSTOM_KEY_A;
     uint32_t CUSTOM_KEY_B;

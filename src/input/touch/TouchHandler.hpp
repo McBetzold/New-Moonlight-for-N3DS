@@ -177,6 +177,25 @@ class KeyboardTouchHandler : public TouchHandlerBase {
     std::map<int, keycode_info> *selected_keycodes = nullptr;
 };
 
+// Mirror view that sends real touch events (LiSendTouchEvent) so Windows
+// treats the stylus as a touch screen; falls back to the Mirror view's mouse
+// clicks on hosts without touch support.
+class PassthroughTouchHandler : public TouchHandlerBase {
+  public:
+    PassthroughTouchHandler();
+    ~PassthroughTouchHandler();
+
+  private:
+    void _handle_touch_down(touchPosition touch) override;
+    void _handle_touch_up(touchPosition touch) override;
+    void _handle_touch_hold(touchPosition touch) override;
+    bool send(uint8_t event_type, touchPosition touch);
+
+  private:
+    bool supported = true;
+    bool touching = false;
+};
+
 class MirrorTouchHandler : public TouchHandlerBase {
   public:
     MirrorTouchHandler();

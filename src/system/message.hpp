@@ -44,6 +44,9 @@ enum class N3dsTouchType {
     DEBUG_TOUCH,
     // List of the host's server commands (Apollo); tapping one runs it
     SERVER_CMD_TOUCH,
+    // Mirror view whose touches are sent as real touch events (Sunshine's
+    // touch support), falling back to mouse clicks on hosts without it
+    PASSTHROUGH_TOUCH,
 };
 class TouchStateChangedMsg : public IMessage {
   public:

@@ -33,8 +33,7 @@ static std::map<int, std::map<int, N3dsTouchType>> button_map{
     {1, {{0, N3dsTouchType::KEYBOARD}, {1, N3dsTouchType::ABSOLUTE_TOUCH}}},
     {2, {{0, N3dsTouchType::DS_TOUCH}, {1, N3dsTouchType::MAGNIFY_TOUCH}}},
     {3, {{0, N3dsTouchType::SERVER_CMD_TOUCH}, {1, N3dsTouchType::DEBUG_TOUCH}}},
-    // Exit spans the whole bottom row
-    {4, {{0, N3dsTouchType::DISABLED}, {1, N3dsTouchType::DISABLED}}},
+    {4, {{0, N3dsTouchType::PASSTHROUGH_TOUCH}, {1, N3dsTouchType::DISABLED}}},
 };
 
 // HOME stays disallowed while streaming; N3dsInput turns a rejected HOME
