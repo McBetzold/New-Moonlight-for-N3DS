@@ -47,10 +47,10 @@ struct ResolutionPreset {
 };
 
 static const ResolutionPreset PRESETS[] = {
-    {320, 240, "320x240 (bottom screen)"},
-    {400, 240, "400x240 (top screen)"},
-    {800, 240, "800x240 (top screen, wide)"},
-    {800, 480, "800x480 (dual screen)"},
+    {320, 240, "320x240 - tiny desktop, 1:1 on bottom"},
+    {400, 240, "400x240 - tiny desktop, 1:1 on top"},
+    {800, 240, "800x240 - very short desktop (wide)"},
+    {800, 480, "800x480 - recommended"},
 };
 static const int PRESET_COUNT = sizeof(PRESETS) / sizeof(PRESETS[0]);
 
@@ -127,9 +127,12 @@ void MoonlightUi::settings_build() {
         SettingRow r;
         r.type = SettingRow::Choice;
         r.label = "Resolution";
-        r.desc = "Resolution requested from the host. The New 3DS top screen "
-                 "is 400x240, or 800x240 in wide mode; 800x480 is only needed "
-                 "for the dual-screen views. Press A to type a custom size.";
+        r.desc = "Resolution requested from the host. The top screen is "
+                 "400x240 (5:3), so 800x480 keeps the right shape and is "
+                 "downscaled; the dual-screen views split it. Smaller sizes "
+                 "make the Windows desktop tiny, since it cannot scale below "
+                 "100%. Larger than 1024x512 cannot be shown. A to type a "
+                 "custom size.";
         r.value = [cfg] {
             int i = preset_index(cfg->stream.width, cfg->stream.height);
             if (i >= 0) {
