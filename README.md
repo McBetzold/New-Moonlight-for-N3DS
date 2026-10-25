@@ -28,7 +28,7 @@ After modding your 3DS and installing the Moonlight CIA, open the Moonlight appl
 - While the stream starts, the top screen shows the connection stages (RTSP handshake, control stream, video stream...). Once video arrives, the bottom screen shows the in-stream menu offering view/control options. Touch any of these buttons to select a streaming view.
 - NOTE: You can re-open the streaming menu any time during the stream by pressing the 3DS's HOME button.
     - Pressing the HOME button again from the menu ends the stream (the app keeps running on the PC) and returns you to the 3DS HOME Menu, like the Android app does when it is sent to the background. Reopen Moonlight and press A on the app to resume.
-- NOTE: The Stretch view shows the upper half of the stream on the top screen and the lower half on the bottom screen at the same scale; because the bottom screen is narrower, it shows the central 80% of the lower half rather than squeezing it. Use the `400x480 (Dual screen, 800x960 host)` preset for it: each half is then exactly the top screen's shape. With 800x480 each half is twice as wide as the screens, so the picture is stretched vertically.
+- NOTE: The Stretch view shows the upper half of the stream on the top screen and the lower half on the bottom screen at the same scale; because the bottom screen is narrower, it shows the central 80% of the lower half rather than squeezing it. Use the 800x480 preset for it.
 - NOTE: When the Magnify view is active, you can lock the region you are magnifying by holding either of the shoulder buttons (L or R).
     - When the view is locked, you can use the touchscreen to click, drag, and release items in the selected region of the screen (similar to the Mirror and Stretch views)
 
@@ -41,9 +41,9 @@ Press `START` or tap the gear icon to open the settings page. It is grouped like
 You can modify documented settings either in the app, or by creating/modifying the config file located at `sd:/3ds/moonlight/moonlight.conf`.
 The default settings are recommended for \*New\* 3DS users. The PC list is stored in `sd:/3ds/moonlight/hosts.conf`.
 
-### PC games that refuse a tiny display
+### PC games that won't run below HD
 
-Apollo (and Sunshine with display-mode changes on) sizes the host display from the resolution in the launch request, so a plain 800x480 or 400x240 stream gives Windows and the game an 800x480 or 400x240 monitor. Many games refuse to start on that or fall back to a window. The **PC games (800x480, 1920x1152 host)** preset keeps the 800x480 stream but asks the host for a 1920x1152 display, the same 5:3 shape as the top screen; Apollo creates its virtual display at that size and scales the picture down, so the game sees a normal monitor and nothing changes on the 3DS. The request also carries `virtualDisplay=1`, so Apollo uses a virtual display even if the app is not configured for one (Sunshine ignores it). The same host size can be typed after the stream size when entering a custom resolution, and in `moonlight.conf` it is `host_width = 1920` / `host_height = 1152` (0 = same as the stream). Keep the host display the same shape as the stream, or the host adds black bars; the settings page warns when the shapes differ.
+Apollo (and Sunshine with display-mode changes on) sizes the host display from the resolution in the launch request, so a plain 800x480 or 400x240 stream gives Windows and the game a monitor that small. Many games refuse to start below HD or fall back to a window. The **800x480 (PC games, experimental)** preset exists for them: it keeps the 800x480 stream but asks the host for a 1920x1152 display, the same 5:3 shape as the top screen. Apollo creates its virtual display at that size and scales every frame down, so the game sees an ordinary HD monitor and nothing changes on the 3DS. The request also carries `virtualDisplay=1`, so Apollo uses a virtual display even if the app is not configured for one (Sunshine ignores it). The same host size can be typed after the stream size when entering a custom resolution, and in `moonlight.conf` it is `host_width = 1920` / `host_height = 1152` (0 = same as the stream). Keep the host display the same shape as the stream, or the host adds black bars; the settings page warns when the shapes differ.
 
 ### 3D
 
@@ -55,7 +55,9 @@ The top screen can show the stream in stereoscopic 3D. Choose a mode under **3D 
     - Emulators with a side-by-side stereoscopic output, such as Dolphin and RPCS3.
     - Side-by-side 3D videos played full screen.
 
-  Stream at 800x480 (the Desktop or PC games preset): each eye then gets a full 400x240 picture with the right shape. A 400-wide stream works too, but each eye only has 200 columns. Full-width side-by-side, where each eye keeps its full width, comes out squashed; pick the half-width variant when a tool offers both.
+  Stream at 800x480 (the Desktop or PC games preset): each eye then gets a full 400x240 picture with the right shape. A 400-wide stream works too, but each eye only has 200 columns.
+
+  **Getting the PC to output it.** Whatever draws the picture has to render two views and pack them into one frame the size of the screen Apollo streams: the left eye squeezed into the left half, the right eye into the right half. Look for a "3D", "stereoscopic" or "SBS" option in the game, emulator or video player; when there is none, ReShade's SuperDepth3D adds one to most games. Choose *half* side-by-side when offered, and run it fullscreen on Apollo's virtual display rather than in a window on another monitor. To check before raising the slider, look at the stream in 2D: it should show two nearly identical copies of the scene side by side, each squeezed to half its width. Copies with normal proportions mean full-width side-by-side, which comes out squashed, and copies stacked top and bottom are a different 3D format that Moonlight cannot use.
 - **Flat depth** (`stereo_3d = depth`) works with any stream. Both eyes see the whole picture, slightly offset so it sits behind the screen like a window; the slider sets how far. It does not add depth within the picture.
 - **Swap eyes** (`swap_eyes = true`) gives each eye the other eye's picture. Turn it on if side-by-side 3D looks inside out, with near things appearing far away. In flat depth mode it brings the picture out in front of the screen instead.
 

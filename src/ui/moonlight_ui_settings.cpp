@@ -61,16 +61,9 @@ static const ResolutionPreset PRESETS[] = {
      "The top screen's shape with four times the pixels, scaled down 2:1. "
      "Best for the Windows desktop and anything with small text."},
     {800, 480, 1920, 1152, "800x480 (PC games, experimental)",
-     "Streams 800x480 but asks the host for a 1920x1152 display, so games "
-     "that refuse tiny screens still run and the host scales the picture "
-     "down. Needs Apollo's virtual display."},
-    // Stretch view: each half is 400x240, i.e. the top screen's exact shape,
-    // and the bottom screen shows the middle 320 of those 400 columns. The
-    // host renders 800x960 so the desktop stays usable.
-    {400, 480, 800, 960, "400x480 (Dual screen, experimental)",
-     "For the Stretch view: each half is exactly the top screen's shape and "
-     "the bottom screen shows the middle 80% of the lower half. The host "
-     "renders 800x960. Needs Apollo's virtual display."},
+     "For games that won't run below HD. The PC renders on a full 1920x1152 "
+     "display and Apollo scales every frame down to the 800x480 stream. "
+     "Needs Apollo's virtual display."},
     {640, 480, 0, 0, "640x480 (Bottom-screen views)",
      "Matches the bottom screen's 4:3 shape for the Mirror view. Slightly "
      "squeezed on the top screen."},
@@ -79,6 +72,29 @@ static const ResolutionPreset PRESETS[] = {
      "becomes very small."},
 };
 static const int PRESET_COUNT = sizeof(PRESETS) / sizeof(PRESETS[0]);
+
+struct StereoModeOption {
+    const char *label;
+    const char *desc; // shown on the top screen while selected
+};
+
+// Indexed by STEREO_3D_MODE
+static const StereoModeOption STEREO_MODES[STEREO_3D_MODE_COUNT] = {
+    {"Off", "Plain 2D. The 3D slider does nothing, so nudging it can never "
+            "split the picture."},
+    {"Side-by-side",
+     "For a PC sending half side-by-side 3D: left eye squeezed into the left "
+     "half, right eye into the right. With the slider down you should see two "
+     "squeezed copies. Use 800x480."},
+    {"Flat depth",
+     "Works with any stream. Both eyes see the whole picture, set back behind "
+     "the screen like a window; the 3D slider sets how far."},
+};
+
+static const StereoModeOption &stereo_option(STEREO_3D_MODE mode) {
+    int i = (int)mode;
+    return STEREO_MODES[(i >= 0 && i < STEREO_3D_MODE_COUNT) ? i : 0];
+}
 
 static const char *CUSTOM_RESOLUTION_DESC =
     "Custom size. Width should be a multiple of 400 or 320 and height of "
@@ -307,19 +323,12 @@ void MoonlightUi::settings_build() {
         SettingRow r;
         r.type = SettingRow::Choice;
         r.label = "3D mode";
-        r.desc = "Side-by-side: the PC sends half side-by-side 3D (ReShade "
-                 "SuperDepth3D, an emulator's SBS mode) and each half goes to "
-                 "one eye. Flat depth: sets any 2D picture back behind the "
-                 "screen. The 3D slider turns it on.";
+        r.desc = STEREO_MODES[STEREO_3D_OFF].desc;
+        r.desc_fn = [cfg] {
+            return std::string(stereo_option(cfg->stereo_3d).desc);
+        };
         r.value = [cfg] {
-            switch (cfg->stereo_3d) {
-            case STEREO_3D_SIDE_BY_SIDE:
-                return std::string("Side-by-side");
-            case STEREO_3D_FLAT_DEPTH:
-                return std::string("Flat depth");
-            default:
-                return std::string("Off");
-            }
+            return std::string(stereo_option(cfg->stereo_3d).label);
         };
         r.adjust = [cfg](int dir) {
             int v = ((int)cfg->stereo_3d + dir + STEREO_3D_MODE_COUNT) %
@@ -333,10 +342,24 @@ void MoonlightUi::settings_build() {
         rows_.push_back(r);
     }
     toggle("Swap eyes",
-           "Gives each eye the other eye's picture. Turn it on if "
-           "side-by-side 3D looks inside out. In flat depth mode it brings "
-           "the picture out in front of the screen instead.",
+           "Exchanges the two eye pictures in either 3D mode. It has no "
+           "effect while 3D mode is off.",
            &cfg->swap_eyes);
+    // Explain what swapping does in the mode that is currently selected
+    rows_.back().desc_fn = [cfg] {
+        switch (cfg->stereo_3d) {
+        case STEREO_3D_SIDE_BY_SIDE:
+            return std::string(
+                "Gives each eye the other half of the picture. Turn it on if "
+                "near things look far away and far things look near.");
+        case STEREO_3D_FLAT_DEPTH:
+            return std::string("Brings the picture out in front of the screen "
+                               "instead of setting it back behind it.");
+        default:
+            return std::string("Exchanges the two eye pictures in either 3D "
+                               "mode. It has no effect while 3D mode is off.");
+        }
+    };
 
     header("Audio Settings");
     toggle("Play audio on host PC",
