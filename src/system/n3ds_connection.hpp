@@ -20,9 +20,12 @@
 #pragma once
 
 #include "../system/AtomicVar.hpp"
+#include "../system/ThreadLock.hpp"
 #include "../system/subscriber.hpp"
+#include <3ds.h>
 #include <Limelight.h>
 #include <memory>
+#include <string>
 
 class N3dsConnectionListener : public ISubscriber {
   public:
@@ -49,13 +52,46 @@ class N3dsConnectionListener : public ISubscriber {
                                 unsigned char motionType,
                                 unsigned short reportRateHz);
 
+    // Stage progress, reported on the thread that runs LiStartConnection.
+    void stage_starting(int stage);
+    void stage_complete(int stage);
+    void stage_failed(int stage, int errorCode);
+    int current_stage();
+    int failed_stage();
+    int failed_stage_error();
+
+    // The launcher UI owns the GPU until the video decoder is created inside
+    // LiStartConnection. With the handshake armed, stage_starting(stage)
+    // raises a request and blocks until the UI thread has released the GPU
+    // and called ui_teardown_ack().
+    void arm_ui_handshake(int stage);
+    bool ui_teardown_requested();
+    void ui_teardown_ack();
+
     bool is_connection_closed();
+    bool has_terminated();
+    int termination_code();
+    std::string termination_message();
 
   private:
     static std::unique_ptr<N3dsConnectionListener> instance;
     bool enable_motion;
     AtomicVar<bool> debug = false;
     AtomicVar<bool> connection_closed = false;
+
+    AtomicVar<int> stage = STAGE_NONE;
+    AtomicVar<int> failed_stage_value = STAGE_NONE;
+    AtomicVar<int> failed_stage_code = 0;
+
+    bool handshake_armed = false;
+    int handshake_stage = STAGE_NONE;
+    LightEvent teardown_request;
+    LightEvent teardown_done;
+
+    AtomicVar<bool> terminated = false;
+    AtomicVar<int> term_code = 0;
+    ThreadLock message_lock;
+    std::string term_message;
 };
 
 extern CONNECTION_LISTENER_CALLBACKS n3ds_connection_callbacks;

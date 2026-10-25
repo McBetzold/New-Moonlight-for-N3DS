@@ -18,6 +18,7 @@
  */
 
 #include "n3ds_input.hpp"
+#include "../system/apt_state.hpp"
 #include "../system/dispatcher.hpp"
 #include "touch/TouchHandler.hpp"
 
@@ -200,10 +201,18 @@ void N3dsInput::n3dsinput_handle_event() {
         gamepad_state.rightTrigger &= ~n3ds_to_li_trigger(kUp, CUSTOM_KEY_ZR);
     }
 
-    // Use the HOME button to open the menu
+    // HOME opens the stream menu; HOME again from the menu ends the stream
+    // and the launcher then jumps to the HOME Menu (jumping while the
+    // decoder owns the GPU hung the system).
     if (aptCheckHomePressRejected()) {
         if (!menu_active) {
-            force_touchscreen_menu();
+            if (touch_handler->is_menu_active()) {
+                apt_state_request_home();
+                MessageDispatcher::get_instance()->post(
+                    std::make_shared<GenericEventMsg>(MessageType::EXIT_STREAM));
+            } else {
+                force_touchscreen_menu();
+            }
             menu_active = true;
         }
         return;

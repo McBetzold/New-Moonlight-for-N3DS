@@ -42,6 +42,7 @@ SOURCES		:=	src \
 				src/input/touch \
 				src/video/ \
 				src/video/renderer \
+				src/ui \
 				libgamestream \
 				third_party/h264bitstream \
 				third_party/libuuid \

@@ -33,6 +33,9 @@ class N3dsTouchscreenInput : public ISubscriber {
     void accept(IMessage *msg) override;
 
     void n3dsinput_handle_touch(u32 kDown, u32 kUp);
+    bool is_menu_active() const {
+        return touch_type == N3dsTouchType::MENU_TOUCH;
+    }
 
   private:
     void _n3dsinput_set_touch(N3dsTouchType touch_type_in);
