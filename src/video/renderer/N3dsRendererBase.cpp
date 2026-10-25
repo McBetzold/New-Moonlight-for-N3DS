@@ -29,6 +29,16 @@
 #include <stdbool.h>
 #include <stdexcept>
 #include <unistd.h>
+#include <utility>
+
+STEREO_3D_MODE N3dsRendererBase::stereo_mode = STEREO_3D_OFF;
+bool N3dsRendererBase::stereo_swap_eyes = false;
+
+void N3dsRendererBase::set_stereo_options(STEREO_3D_MODE mode,
+                                          bool swap_eyes) {
+    stereo_mode = mode;
+    stereo_swap_eyes = swap_eyes;
+}
 
 N3dsRendererBase::N3dsRendererBase(gfxScreen_t screen_in, int surface_width_in,
                                    int surface_height_in, int image_width_in,
@@ -38,7 +48,14 @@ N3dsRendererBase::N3dsRendererBase(gfxScreen_t screen_in, int surface_width_in,
       surface_height(surface_height_in), image_width(image_width_in),
       image_height(image_height_in), debug(debug_in), px_size(pixel_size) {
     cmdlist = (u32 *)linearAlloc(CMDLIST_SZ * 4);
-    vramFb = vramAlloc(surface_width * surface_height * px_size);
+    // With a 3D mode on, a 400-wide stream also needs room for two 400-column
+    // eye pictures.
+    fb_rows = surface_width;
+    if (screen == GFX_TOP && stereo_mode != STEREO_3D_OFF &&
+        fb_rows < GSP_SCREEN_HEIGHT_TOP_2X) {
+        fb_rows = GSP_SCREEN_HEIGHT_TOP_2X;
+    }
+    vramFb = vramAlloc(fb_rows * surface_height * px_size);
     // Needs to be able to hold an 800x480
     vramTex = vramAlloc(MOON_CTR_VIDEO_TEX_W * MOON_CTR_VIDEO_TEX_H * px_size);
 }
@@ -131,7 +148,8 @@ inline void N3dsRendererBase::log_perf_counters() {
     perf_log_fbcopy_sum = perf_log_fbcopy_max = 0;
 }
 
-void N3dsRendererBase::write_px_to_framebuffer_gpu(uint8_t *__restrict source) {
+void N3dsRendererBase::write_px_to_framebuffer_gpu(
+    uint8_t *__restrict source, const N3dsStereoView &stereo) {
     // Do nothing when GPU right is lost, otherwise we hang when going to
     // the home menu. The APT hook fires before the right is actually taken
     // away, which closes the window where a transfer could be started
@@ -141,6 +159,12 @@ void N3dsRendererBase::write_px_to_framebuffer_gpu(uint8_t *__restrict source) {
     }
 
     u64 start_ticks = svcGetSystemTick();
+
+    // A 3D frame is drawn as the left-eye picture in the first 400 rows of
+    // vramFb and the right-eye picture in the next 400.
+    const bool stereo_on = stereo.enabled && screen == GFX_TOP &&
+                           fb_rows >= GSP_SCREEN_HEIGHT_TOP_2X;
+    const int rt_rows = stereo_on ? GSP_SCREEN_HEIGHT_TOP_2X : surface_width;
 
     // NOTE: At 800x480, we can display the _width_ natively, but the height
     // needs to be downsampled. MVD is incapable of downsampling, so we have to
@@ -171,10 +195,9 @@ void N3dsRendererBase::write_px_to_framebuffer_gpu(uint8_t *__restrict source) {
     C(GPUREG_FRAMEBUFFER_INVALIDATE, 1);
     C(GPUREG_COLORBUFFER_LOC, osConvertVirtToPhys(vramFb) >> 3);
     C(GPUREG_DEPTHBUFFER_LOC, 0);
-    C(GPUREG_RENDERBUF_DIM,
-      (1 << 24) | ((surface_width - 1) << 12) | surface_height);
+    C(GPUREG_RENDERBUF_DIM, (1 << 24) | ((rt_rows - 1) << 12) | surface_height);
     C(GPUREG_FRAMEBUFFER_DIM,
-      (1 << 24) | ((surface_width - 1) << 12) | surface_height);
+      (1 << 24) | ((rt_rows - 1) << 12) | surface_height);
     C(GPUREG_FRAMEBUFFER_BLOCK32, 0);
 
     C(GPUREG_DEPTH_COLOR_MASK, 0xF << 8); // Write RGBA, no depth
@@ -191,8 +214,8 @@ void N3dsRendererBase::write_px_to_framebuffer_gpu(uint8_t *__restrict source) {
 
     C(GPUREG_VIEWPORT_WIDTH, f32tof24(surface_height / 2));
     C(GPUREG_VIEWPORT_INVW, f32tof31(2.0 / ((double)surface_height)) << 1);
-    C(GPUREG_VIEWPORT_HEIGHT, f32tof24(surface_width / 2));
-    C(GPUREG_VIEWPORT_INVH, f32tof31(2.0 / ((double)surface_width)) << 1);
+    C(GPUREG_VIEWPORT_HEIGHT, f32tof24(rt_rows / 2));
+    C(GPUREG_VIEWPORT_INVH, f32tof31(2.0 / ((double)rt_rows)) << 1);
 
     C(GPUREG_SCISSORTEST_MODE, 0);
     C(GPUREG_SCISSORTEST_POS, 0);
@@ -280,12 +303,6 @@ void N3dsRendererBase::write_px_to_framebuffer_gpu(uint8_t *__restrict source) {
                           (1 << 8) |
                               1); // 2 outmap registers, drawing triangle strip
     C(GPUREG_INDEXBUFFER_CONFIG, 0x80000000);
-    C(GPUREG_RESTART_PRIMITIVE, 1);
-
-    // Vertex Data
-    GPUCMD_AddMaskedWrite(GPUREG_GEOSTAGE_CONFIG2, 1, 1);
-    GPUCMD_AddMaskedWrite(GPUREG_START_DRAW_FUNC0, 1, 0);
-    C(GPUREG_FIXEDATTRIB_INDEX, 0xF);
 
     union {
         u32 packed[3];
@@ -314,22 +331,46 @@ void N3dsRendererBase::write_px_to_framebuffer_gpu(uint8_t *__restrict source) {
     // float hw = 2.0f / surface_height;
     float hh = 2.0f / surface_width;
 
-    ATTR(1.0, -1.0, 0.0, 0.0); // TR
-    ATTR(sw, -hh, 0.0, 0.0);
+    // One immediate-mode quad. Clip-space y runs from the screen's right edge
+    // (-1, the end of vramFb) to its left edge (+1, the start); the quad
+    // covers y_right..y_left and shows texture columns s_left..s_right of the
+    // picture, so the 2D quad is (-1, +1, 0, sw).
+    auto draw_quad = [&](float y_right, float y_left, float s_left,
+                         float s_right) {
+        C(GPUREG_RESTART_PRIMITIVE, 1);
+        GPUCMD_AddMaskedWrite(GPUREG_GEOSTAGE_CONFIG2, 1, 1);
+        GPUCMD_AddMaskedWrite(GPUREG_START_DRAW_FUNC0, 1, 0);
+        C(GPUREG_FIXEDATTRIB_INDEX, 0xF);
 
-    ATTR(-1.0, -1.0, 0.0, 0.0); // TL
-    ATTR(sw, sh, 0.0, 0.0);
+        ATTR(1.0, y_right, 0.0, 0.0); // TR
+        ATTR(s_right, -hh, 0.0, 0.0);
 
-    ATTR(1.0, 1.0, 0.0, 0.0); // BR
-    ATTR(0.0, -hh, 0.0, 0.0);
+        ATTR(-1.0, y_right, 0.0, 0.0); // TL
+        ATTR(s_right, sh, 0.0, 0.0);
 
-    ATTR(-1.0, 1.0, 0.0, 0.0); // BL
-    ATTR(0.0, sh, 0.0, 0.0);
+        ATTR(1.0, y_left, 0.0, 0.0); // BR
+        ATTR(s_left, -hh, 0.0, 0.0);
 
-    // End Geometry Pipeline
-    GPUCMD_AddMaskedWrite(GPUREG_START_DRAW_FUNC0, 1, 1);
-    GPUCMD_AddMaskedWrite(GPUREG_GEOSTAGE_CONFIG2, 1, 0);
-    C(GPUREG_VTX_FUNC, 1);
+        ATTR(-1.0, y_left, 0.0, 0.0); // BL
+        ATTR(s_left, sh, 0.0, 0.0);
+
+        GPUCMD_AddMaskedWrite(GPUREG_START_DRAW_FUNC0, 1, 1);
+        GPUCMD_AddMaskedWrite(GPUREG_GEOSTAGE_CONFIG2, 1, 0);
+        C(GPUREG_VTX_FUNC, 1);
+    };
+
+    if (stereo_on && stereo.full_frame) {
+        // Flat depth: each eye gets the whole picture minus a sliver, the left
+        // eye losing the left edge and the right eye the right edge. Every
+        // point then sits a little further left for the left eye than for the
+        // right one, which places the picture behind the screen.
+        float crop = stereo.crop * sw;
+        draw_quad(0.0f, 1.0f, crop, sw);         // left eye
+        draw_quad(-1.0f, 0.0f, 0.0f, sw - crop); // right eye
+    } else {
+        // 2D, or side-by-side 3D where the halves are split up afterwards
+        draw_quad(-1.0f, 1.0f, 0.0f, sw);
+    }
 
     // Stop Command List
     GPUCMD_AddMaskedWrite(GPUREG_PRIMITIVE_CONFIG, 0x8, 0x00000000);
@@ -355,28 +396,36 @@ void N3dsRendererBase::write_px_to_framebuffer_gpu(uint8_t *__restrict source) {
     gspWaitForEvent(GSPGPU_EVENT_P3D, 0);
 
     // Copy into framebuffer, untiled
-    if ((screen == GFX_TOP) && gfxIs3D()) {
-        // Left
+    if (stereo_on && gfxIs3D()) {
         u32 *dest_left =
             (u32 *)gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL);
-        auto surface_width_3d = surface_width / 2;
-        GX_DisplayTransfer(
-            (u32 *)vramFb, GX_BUFFER_DIM(surface_height, surface_width_3d),
-            dest_left, GX_BUFFER_DIM(surface_height, surface_width_3d),
-            GX_TRANSFER_OUT_TILED(0) |
-                GX_TRANSFER_IN_FORMAT(GX_TRANSFER_FMT_RGB565) |
-                GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGB565) |
-                GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO));
-
-        // Right
         u32 *dest_right =
             (u32 *)gfxGetFramebuffer(GFX_TOP, GFX_RIGHT, NULL, NULL);
-        auto surface_offset_3d =
-            surface_height * surface_width * px_size / (sizeof(u32) * 2);
-        GX_DisplayTransfer((u32 *)vramFb + surface_offset_3d,
-                           GX_BUFFER_DIM(surface_height, surface_width_3d),
-                           dest_right,
-                           GX_BUFFER_DIM(surface_height, surface_width_3d),
+        if (stereo.swap) {
+            std::swap(dest_left, dest_right);
+        }
+        const int eye_rows = rt_rows / 2;
+        const u32 eye_offset =
+            surface_height * eye_rows * px_size / sizeof(u32);
+
+        // First half of vramFb: the left-eye picture
+        GX_DisplayTransfer((u32 *)vramFb,
+                           GX_BUFFER_DIM(surface_height, eye_rows), dest_left,
+                           GX_BUFFER_DIM(surface_height, eye_rows),
+                           GX_TRANSFER_OUT_TILED(0) |
+                               GX_TRANSFER_IN_FORMAT(GX_TRANSFER_FMT_RGB565) |
+                               GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGB565) |
+                               GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO));
+        // Wait for each transfer separately. A single wait for two transfers
+        // can return after the first one, which leaves the second one's
+        // completion pending and makes the next frame's wait for the texture
+        // upload return before that upload has finished.
+        gspWaitForEvent(GSPGPU_EVENT_PPF, 0);
+
+        // Second half: the right-eye picture
+        GX_DisplayTransfer((u32 *)vramFb + eye_offset,
+                           GX_BUFFER_DIM(surface_height, eye_rows), dest_right,
+                           GX_BUFFER_DIM(surface_height, eye_rows),
                            GX_TRANSFER_OUT_TILED(0) |
                                GX_TRANSFER_IN_FORMAT(GX_TRANSFER_FMT_RGB565) |
                                GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGB565) |

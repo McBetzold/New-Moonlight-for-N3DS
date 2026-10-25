@@ -155,6 +155,8 @@ void MoonlightUi::run_stream(const std::shared_ptr<HostEntry> &host,
     default:
         break;
     }
+    // Read by the top-screen renderer, which is created once video starts
+    N3dsRendererBase::set_stereo_options(cfg->stereo_3d, cfg->swap_eyes);
 
     N3dsConnectionListener *listener =
         N3dsConnectionListener::create_instance(cfg->motion_controls);

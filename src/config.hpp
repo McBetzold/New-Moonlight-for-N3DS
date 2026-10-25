@@ -31,6 +31,19 @@ enum VIDEO_DECODER_TYPE {
     DISABLE_VIDEO_DECODER
 };
 
+// What the top screen does when the 3D slider is up.
+enum STEREO_3D_MODE {
+    // The slider is ignored and the stream always shows in 2D.
+    STEREO_3D_OFF = 0,
+    // The host sends half side-by-side 3D: the left half of the picture goes
+    // to the left eye and the right half to the right eye.
+    STEREO_3D_SIDE_BY_SIDE,
+    // Any 2D stream: both eyes see the whole picture, offset so it sits
+    // behind the screen like a window. The slider sets the depth.
+    STEREO_3D_FLAT_DEPTH,
+    STEREO_3D_MODE_COUNT
+};
+
 typedef struct _CONFIGURATION {
     STREAM_CONFIGURATION stream;
     char *app;
@@ -61,7 +74,12 @@ typedef struct _CONFIGURATION {
     // the picture down, so games see a normal monitor.
     int host_width;
     int host_height;
+    STEREO_3D_MODE stereo_3d;
+    // Exchange the left- and right-eye pictures in either 3D mode.
+    bool swap_eyes;
 } CONFIGURATION, *PCONFIGURATION;
+
+const char *stereo_3d_mode_name(STEREO_3D_MODE mode);
 
 bool config_file_parse(char *filename, PCONFIGURATION config);
 void config_parse(int argc, char *argv[], PCONFIGURATION config);
