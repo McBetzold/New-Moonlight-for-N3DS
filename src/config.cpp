@@ -53,6 +53,8 @@ static struct option long_options[] = {
     {"swapfacebuttons", required_argument, NULL, 'A'},
     {"swaptriggersandshoulders", required_argument, NULL, 'B'},
     {"usetriggersformouse", required_argument, NULL, 'C'},
+    {"host_width", required_argument, NULL, 'D'},
+    {"host_height", required_argument, NULL, 'E'},
     {0, 0, 0, 0},
 };
 
@@ -115,6 +117,12 @@ void parse_argument(int c, char *value, PCONFIGURATION config) {
         config->use_triggers_for_mouse =
             ((value != NULL) && (strcmp(value, "true") == 0));
         break;
+    case 'D':
+        config->host_width = value != NULL ? atoi(value) : 0;
+        break;
+    case 'E':
+        config->host_height = value != NULL ? atoi(value) : 0;
+        break;
     case 1:
         if (config->action == NULL)
             config->action = value;
@@ -160,6 +168,8 @@ void config_save(char *filename, PCONFIGURATION config) {
 
     write_config_int(fd, "width", config->stream.width);
     write_config_int(fd, "height", config->stream.height);
+    write_config_int(fd, "host_width", config->host_width);
+    write_config_int(fd, "host_height", config->host_height);
     write_config_int(fd, "fps", config->stream.fps);
     write_config_int(fd, "bitrate", config->stream.bitrate);
     write_config_int(fd, "packetsize", config->stream.packetSize);
@@ -207,6 +217,8 @@ void config_parse(int argc, char *argv[], PCONFIGURATION config) {
 
     config->stream.width = 800;
     config->stream.height = 480;
+    config->host_width = 0;
+    config->host_height = 0;
     config->stream.fps = 60;
     config->stream.encryptionFlags = ENCFLG_NONE;
     config->video_decoder = VIDEO_DECODER_TYPE::HARDWARE_VIDEO_DECODER;

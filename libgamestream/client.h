@@ -57,6 +57,10 @@ int gs_quit_app(PSERVER_DATA server);
 /* Downloads the box art image for an app. On success *out_data is a malloc'd
  * buffer of *out_size bytes that the caller must free(). */
 int gs_download_boxart(PSERVER_DATA server, int appId, char **out_data, size_t *out_size);
+/* Display mode to request from the host in place of the stream size (Apollo
+ * sizes its virtual display from it and scales the picture down to the
+ * stream). Pass 0 for either value to request the stream size again. */
+void gs_set_host_display_mode(int width, int height);
 
 #ifdef __cplusplus
 }

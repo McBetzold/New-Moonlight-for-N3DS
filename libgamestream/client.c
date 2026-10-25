@@ -57,6 +57,23 @@ static EVP_PKEY *privateKey;
 
 const char* gs_error;
 
+/* Display mode asked of the host in place of the stream size. Apollo creates
+ * its virtual display at this size and scales the picture down to the stream;
+ * Sunshine applies it to the display when "Optimize game settings" is on.
+ * 0 = same as the stream. */
+static int host_mode_width = 0;
+static int host_mode_height = 0;
+
+void gs_set_host_display_mode(int width, int height) {
+  if (width > 0 && height > 0) {
+    host_mode_width = width;
+    host_mode_height = height;
+  } else {
+    host_mode_width = 0;
+    host_mode_height = 0;
+  }
+}
+
 #define LEN_AS_HEX_STR(x) ((x) * 2 + 1)
 #define SIZEOF_AS_HEX_STR(x) LEN_AS_HEX_STR(sizeof(x))
 
@@ -740,10 +757,16 @@ int gs_start_app(PSERVER_DATA server, STREAM_CONFIGURATION *config, int appId, b
   char* result = NULL;
   char uuid_str[UUID_STRLEN];
 
+  /* The host configures its display from the mode in the launch request, so an
+   * overriding host display mode goes there while the stream keeps its own
+   * size (sent later in the RTSP handshake). */
+  int mode_width = host_mode_width > 0 ? host_mode_width : config->width;
+  int mode_height = host_mode_height > 0 ? host_mode_height : config->height;
+
   PDISPLAY_MODE mode = server->modes;
   bool correct_mode = false;
   while (mode != NULL) {
-    if (mode->width == config->width && mode->height == config->height) {
+    if (mode->width == mode_width && mode->height == mode_height) {
       if (mode->refresh == config->fps)
         correct_mode = true;
     }
@@ -778,9 +801,11 @@ int gs_start_app(PSERVER_DATA server, STREAM_CONFIGURATION *config, int appId, b
   uuid_generate_random(uuid);
   uuid_unparse(uuid, uuid_str);
   int surround_info = SURROUNDAUDIOINFO_FROM_AUDIO_CONFIGURATION(config->audioConfiguration);
-  snprintf(url, sizeof(url), "https://%s:%u/%s?uniqueid=%s&uuid=%s&appid=%d&mode=%dx%dx%d&additionalStates=1&sops=%d&rikey=%s&rikeyid=%d&localAudioPlayMode=%d&surroundAudioInfo=%d&remoteControllersBitmap=%d&gcmap=%d%s%s",
-           server->serverInfo.address, server->httpsPort, server->currentGame ? "resume" : "launch", unique_id, uuid_str, appId, config->width, config->height, fps, sops, rikey_hex, rikeyid, localaudio, surround_info, gamepad_mask, gamepad_mask,
+  snprintf(url, sizeof(url), "https://%s:%u/%s?uniqueid=%s&uuid=%s&appid=%d&mode=%dx%dx%d&additionalStates=1&sops=%d&rikey=%s&rikeyid=%d&localAudioPlayMode=%d&surroundAudioInfo=%d&remoteControllersBitmap=%d&gcmap=%d%s%s%s",
+           server->serverInfo.address, server->httpsPort, server->currentGame ? "resume" : "launch", unique_id, uuid_str, appId, mode_width, mode_height, fps, sops, rikey_hex, rikeyid, localaudio, surround_info, gamepad_mask, gamepad_mask,
            (config->supportedVideoFormats & VIDEO_FORMAT_MASK_10BIT) ? "&hdrMode=1&clientHdrCapVersion=0&clientHdrCapSupportedFlagsInUint32=0&clientHdrCapMetaDataId=NV_STATIC_METADATA_TYPE_1&clientHdrCapDisplayData=0x0x0x0x0x0x0x0x0x0x0" : "",
+           /* A host display mode only makes sense on a display sized to it, so ask Apollo for a virtual one (ignored by Sunshine). */
+           host_mode_width > 0 ? "&virtualDisplay=1" : "",
            LiGetLaunchUrlQueryParameters());
   if ((ret = http_request(url, data)) == GS_OK)
     server->currentGame = appId;

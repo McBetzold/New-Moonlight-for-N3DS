@@ -56,6 +56,11 @@ typedef struct _CONFIGURATION {
     bool swap_face_buttons;
     bool swap_triggers_and_shoulders;
     bool use_triggers_for_mouse;
+    // Display mode asked of the host instead of the stream size; 0 = same as
+    // the stream. Apollo creates its virtual display at this size and scales
+    // the picture down, so games see a normal monitor.
+    int host_width;
+    int host_height;
 } CONFIGURATION, *PCONFIGURATION;
 
 bool config_file_parse(char *filename, PCONFIGURATION config);

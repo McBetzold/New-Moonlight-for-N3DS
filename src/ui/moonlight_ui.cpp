@@ -1508,9 +1508,13 @@ void MoonlightUi::apps_draw_top() {
     ty += line_height(0.38f) + 16.0f;
 
     std::string res = std::to_string(config_->stream.width) + "x" +
-                      std::to_string(config_->stream.height) + "  " +
-                      std::to_string(config_->stream.fps) + " fps  " +
-                      std::to_string(config_->stream.bitrate / 1000) + " Mbps";
+                      std::to_string(config_->stream.height);
+    if (config_->host_width > 0 && config_->host_height > 0) {
+        res += " (host " + std::to_string(config_->host_width) + "x" +
+               std::to_string(config_->host_height) + ")";
+    }
+    res += "  " + std::to_string(config_->stream.fps) + " fps  " +
+           std::to_string(config_->stream.bitrate / 1000) + " Mbps";
     text(res, tx, ty, 0.36f, color::text_faint);
     ty += line_height(0.36f) + 2.0f;
     text(cur_host_ ? cur_host_->address_text() : "", tx, ty, 0.36f,
