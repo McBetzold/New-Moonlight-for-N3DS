@@ -18,6 +18,7 @@
  */
 
 #include "N3dsRenderer.hpp"
+#include "../../system/apt_state.hpp"
 #include "vshader_shbin.h"
 
 #include <3ds.h>
@@ -171,8 +172,10 @@ inline void N3dsRendererBase::log_perf_counters() {
 
 void N3dsRendererBase::write_px_to_framebuffer_gpu(uint8_t *__restrict source) {
     // Do nothing when GPU right is lost, otherwise we hang when going to
-    // the home menu.
-    if (!gspHasGpuRight()) {
+    // the home menu. The APT hook fires before the right is actually taken
+    // away, which closes the window where a transfer could be started
+    // mid-transition.
+    if (apt_state_suspended() || !gspHasGpuRight()) {
         return;
     }
 
