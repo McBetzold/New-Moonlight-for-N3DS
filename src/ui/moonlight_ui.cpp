@@ -1264,6 +1264,20 @@ void MoonlightUi::pair_host(const std::shared_ptr<HostEntry> &host) {
 }
 
 void MoonlightUi::unpair_host(const std::shared_ptr<HostEntry> &host) {
+    // Only GeForce Experience implements the client-initiated /unpair
+    // request; Sunshine (and forks such as Apollo) remove paired devices
+    // from their web UI instead.
+    if (host->server_valid && !host->server.isNvidiaSoftware) {
+        Modal m;
+        m.title = "Unpair from " + host->display_name();
+        m.message =
+            "Sunshine hosts can only be unpaired from the host PC: open the "
+            "Sunshine web UI, go to PIN Pairing and remove this device "
+            "(\"roth\") from the paired clients, then refresh here.";
+        m.buttons = {"OK"};
+        show_modal(m);
+        return;
+    }
     if (!confirm("Unpair from " + host->display_name() + "?",
                  "You will need to pair again before streaming.", "Unpair",
                  "Cancel", true)) {
