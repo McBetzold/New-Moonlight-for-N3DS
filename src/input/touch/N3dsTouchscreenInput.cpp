@@ -57,6 +57,9 @@ void N3dsTouchscreenInput::_n3dsinput_set_touch(N3dsTouchType touch_type_in) {
     case N3dsTouchType::ABSOLUTE_TOUCH:
         handler = std::make_unique<MirrorTouchHandler>();
         break;
+    case N3dsTouchType::PASSTHROUGH_TOUCH:
+        handler = std::make_unique<PassthroughTouchHandler>();
+        break;
     case N3dsTouchType::DS_TOUCH:
         handler = std::make_unique<StretchTouchHandler>();
         break;

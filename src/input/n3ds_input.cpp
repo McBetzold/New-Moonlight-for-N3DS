@@ -27,6 +27,7 @@
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define TOUCH_GAMEPAD_BUTTONS (SPECIAL_FLAG | LS_CLK_FLAG | RS_CLK_FLAG)
@@ -45,11 +46,13 @@
 
 N3dsInput::N3dsInput(int image_width, int image_height, bool swap_face_buttons,
                      bool swap_triggers_and_shoulders,
-                     bool use_triggers_for_mouse_in, bool motion_controls_in) {
+                     bool use_triggers_for_mouse_in, bool motion_controls_in,
+                     bool cstick_mouse_in) {
     hidInit();
     HIDUSER_GetGyroscopeRawToDpsCoefficient(&gyro_coeff);
     use_triggers_for_mouse = use_triggers_for_mouse_in;
     motion_controls = motion_controls_in;
+    cstick_mouse_enabled = cstick_mouse_in;
     _add_gamepad();
 
     // Ternary setup is less efficient, but more readable.
@@ -232,8 +235,59 @@ void N3dsInput::n3dsinput_handle_event() {
     gamepad_state.rightStickY =
         scale_n3ds_axis(cstick_pos.dy, N3DS_C_STICK_MAX);
 
+    // Holding START for about a second toggles the C-stick between the right
+    // stick and a mouse pointer (ZL/ZR become its buttons). The START press
+    // itself still reaches the host, as moonlight-qt's version of this does.
+    if (cstick_mouse_enabled) {
+        if (hidKeysHeld() & KEY_START) {
+            u64 now = svcGetSystemTick();
+            if (start_held_since == 0) {
+                start_held_since = now;
+                start_hold_handled = false;
+            } else if (!start_hold_handled &&
+                       now - start_held_since > SYSCLOCK_ARM11) {
+                start_hold_handled = true;
+                cstick_mouse_active = !cstick_mouse_active;
+                mouse_remainder_x = mouse_remainder_y = 0;
+                if (!cstick_mouse_active && !use_triggers_for_mouse) {
+                    // Let go of any mouse button the triggers were holding
+                    if (gamepad_state.leftTrigger)
+                        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE,
+                                               BUTTON_LEFT);
+                    if (gamepad_state.rightTrigger)
+                        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE,
+                                               BUTTON_RIGHT);
+                }
+            }
+        } else {
+            start_held_since = 0;
+        }
+    }
+    if (cstick_mouse_active) {
+        // Up to ~12 px per input event at full deflection, with a small dead
+        // zone; fractions carry over so slow movement still registers.
+        const int deadzone = 12;
+        int dx = cstick_pos.dx, dy = cstick_pos.dy;
+        if (abs(dx) < deadzone)
+            dx = 0;
+        if (abs(dy) < deadzone)
+            dy = 0;
+        if (dx || dy) {
+            mouse_remainder_x += dx * 12.0f / N3DS_C_STICK_MAX;
+            mouse_remainder_y -= dy * 12.0f / N3DS_C_STICK_MAX;
+            int mx = (int)mouse_remainder_x, my = (int)mouse_remainder_y;
+            mouse_remainder_x -= mx;
+            mouse_remainder_y -= my;
+            if (mx || my)
+                LiSendMouseMoveEvent((short)mx, (short)my);
+        }
+        // The host sees a centred right stick while the C-stick is the mouse
+        gamepad_state.rightStickX = 0;
+        gamepad_state.rightStickY = 0;
+    }
+
     if (_gamepad_state_changed()) {
-        if (use_triggers_for_mouse) {
+        if (use_triggers_for_mouse || cstick_mouse_active) {
             if (previous_state.leftTrigger != gamepad_state.leftTrigger) {
                 LiSendMouseButtonEvent(gamepad_state.leftTrigger
                                            ? BUTTON_ACTION_PRESS

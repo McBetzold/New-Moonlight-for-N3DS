@@ -110,6 +110,7 @@ void VideoDecoderBase::_accept_touch_state_changed(N3dsTouchType ttype) {
             ->set_bottom_screen(keyboard_bgr);
         break;
     case (N3dsTouchType::ABSOLUTE_TOUCH):
+    case (N3dsTouchType::PASSTHROUGH_TOUCH):
         renderer = std::make_unique<N3dsRendererDualScreenMirror>(
             surface_width, surface_height, image_width, image_height,
             pixel_size);
