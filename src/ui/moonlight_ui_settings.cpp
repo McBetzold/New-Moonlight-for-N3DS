@@ -47,10 +47,10 @@ struct ResolutionPreset {
 };
 
 static const ResolutionPreset PRESETS[] = {
-    {320, 240, "320x240 - tiny desktop, 1:1 on bottom"},
-    {400, 240, "400x240 - tiny desktop, 1:1 on top"},
-    {800, 240, "800x240 - very short desktop (wide)"},
-    {800, 480, "800x480 - recommended"},
+    {400, 240, "400x240 - games (sharpest, lightest)"},
+    {800, 480, "800x480 - desktop and Stretch view"},
+    {640, 480, "640x480 - Mirror view (4:3)"},
+    {320, 240, "320x240 - bottom screen 1:1"},
 };
 static const int PRESET_COUNT = sizeof(PRESETS) / sizeof(PRESETS[0]);
 
@@ -127,12 +127,12 @@ void MoonlightUi::settings_build() {
         SettingRow r;
         r.type = SettingRow::Choice;
         r.label = "Resolution";
-        r.desc = "Resolution requested from the host. The top screen is "
-                 "400x240 (5:3), so 800x480 keeps the right shape and is "
-                 "downscaled; the dual-screen views split it. Smaller sizes "
-                 "make the Windows desktop tiny, since it cannot scale below "
-                 "100%. Larger than 1024x512 cannot be shown. A to type a "
-                 "custom size.";
+        r.desc = "400x240 is pixel-exact on the top screen and the lightest "
+                 "to decode: best for games. 800x480 keeps the top screen's "
+                 "shape and gives the desktop room; the Stretch view shows "
+                 "its halves at the same scale on both screens. 640x480 "
+                 "matches the bottom screen for the Mirror view. Larger than "
+                 "1024x512 cannot be shown. A to type a custom size.";
         r.value = [cfg] {
             int i = preset_index(cfg->stream.width, cfg->stream.height);
             if (i >= 0) {
