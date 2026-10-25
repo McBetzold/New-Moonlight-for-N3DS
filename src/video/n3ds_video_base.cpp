@@ -82,6 +82,12 @@ void VideoDecoderBase::_accept_touch_state_changed(N3dsTouchType ttype) {
             surface_width, surface_height, image_width, image_height,
             pixel_size, true);
         break;
+    case (N3dsTouchType::SERVER_CMD_TOUCH):
+        // The touch handler owns the bottom screen (a text console)
+        renderer = std::make_unique<N3dsRendererNormal>(
+            surface_width, surface_height, image_width, image_height,
+            pixel_size);
+        break;
     case (N3dsTouchType::GAMEPAD):
         renderer = std::make_unique<N3dsRendererNormal>(
             surface_width, surface_height, image_width, image_height,

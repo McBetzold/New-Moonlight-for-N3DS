@@ -70,6 +70,28 @@ class DebugTouchHandler : public TouchHandlerBase {
     static PrintConsole bottomScreen;
 };
 
+// Bottom-screen list of the host's server commands (Apollo). Tapping an entry
+// sends it over the control stream; the last entry returns to the menu.
+class ServerCmdTouchHandler : public TouchHandlerBase {
+  public:
+    ServerCmdTouchHandler();
+    ~ServerCmdTouchHandler();
+
+  private:
+    void _handle_touch_down(touchPosition touch) override;
+    void _handle_touch_up(touchPosition touch) override;
+    void _handle_touch_hold(touchPosition touch) override;
+    void draw();
+    int row_at(touchPosition touch) const;
+
+  private:
+    PrintConsole console;
+    int pressed_row = -1;
+    int idle_events = 0;
+    bool redrawn = false;
+    char status[48] = "";
+};
+
 class MenuTouchHandler : public TouchHandlerBase {
   public:
     MenuTouchHandler();

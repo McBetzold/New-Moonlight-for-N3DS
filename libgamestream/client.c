@@ -27,8 +27,10 @@
 #include <Limelight.h>
 
 #include <sys/stat.h>
+#include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
 #ifdef __3DS__
@@ -63,6 +65,24 @@ const char* gs_error;
  * 0 = same as the stream. */
 static int host_mode_width = 0;
 static int host_mode_height = 0;
+
+/* URL-encoded device name sent while pairing. Apollo shows it in its client
+ * list and keys per-client settings (display mode override, permissions) on
+ * the paired client, so it should be recognizable. */
+static char device_name[64] = "New%203DS";
+
+void gs_set_device_name(const char* name) {
+  size_t o = 0;
+  for (const char* p = name; *p && o + 4 < sizeof(device_name); p++) {
+    unsigned char c = (unsigned char)*p;
+    if (isalnum(c) || c == '-' || c == '_' || c == '.') {
+      device_name[o++] = c;
+    } else {
+      o += snprintf(device_name + o, sizeof(device_name) - o, "%%%02X", c);
+    }
+  }
+  device_name[o] = 0;
+}
 
 void gs_set_host_display_mode(int width, int height) {
   if (width > 0 && height > 0) {
@@ -253,6 +273,43 @@ static int load_serverinfo(PSERVER_DATA server, bool https) {
     char *hostnameText = NULL;
     if (xml_search(data->memory, data->size, "hostname", &hostnameText) == GS_OK)
       server->hostname = hostnameText;
+  }
+
+  // Optional Apollo extensions. Permission is sent over plain HTTP too (as 0),
+  // so its presence identifies an Apollo host even before pairing; the rest
+  // only comes with the HTTPS request of a paired client.
+  {
+    char *text = NULL;
+    if (xml_search(data->memory, data->size, "Permission", &text) == GS_OK) {
+      if (strlen(text) > 0) {
+        server->isApollo = true;
+        if (https)
+          server->permission = (unsigned int) strtoul(text, NULL, 10);
+      }
+      free(text);
+    }
+    text = NULL;
+    server->virtualDisplayDriverReady = -1;
+    if (xml_search(data->memory, data->size, "VirtualDisplayDriverReady", &text) == GS_OK) {
+      if (strlen(text) > 0)
+        server->virtualDisplayDriverReady = strcmp(text, "true") == 0 || strcmp(text, "1") == 0;
+      free(text);
+    }
+    text = NULL;
+    if (xml_search(data->memory, data->size, "currentgameuuid", &text) == GS_OK) {
+      free(server->currentGameUuid);
+      server->currentGameUuid = strlen(text) > 0 ? text : NULL;
+      if (server->currentGameUuid == NULL)
+        free(text);
+    }
+    if (https) {
+      for (int i = 0; i < server->serverCmdCount; i++)
+        free(server->serverCmds[i]);
+      free(server->serverCmds);
+      server->serverCmds = NULL;
+      server->serverCmdCount = 0;
+      xml_search_all(data->memory, data->size, "ServerCommand", &server->serverCmds, &server->serverCmdCount);
+    }
   }
 
   // These fields are present on all version of GFE that this client supports
@@ -451,11 +508,13 @@ int gs_unpair(PSERVER_DATA server) {
   return ret;
 }
 
-int gs_pair(PSERVER_DATA server, char* pin) {
+int gs_pair(PSERVER_DATA server, char* pin, const char* otpPassphrase) {
   int ret = GS_OK;
   char* result = NULL;
   size_t url_max_len = 16384;
   char* url = malloc(url_max_len);
+  /* "&otpauth=<hash>" for Apollo's one-time PIN, otherwise empty */
+  char otp_param[16 + SHA256_DIGEST_LENGTH * 2 + 1] = "";
   uuid_t uuid;
   char uuid_str[UUID_STRLEN];
   char* plaincert = NULL;
@@ -476,9 +535,27 @@ int gs_pair(PSERVER_DATA server, char* pin) {
   RAND_bytes(salt_data, sizeof(salt_data));
   bytes_to_hex(salt_data, salt_hex, sizeof(salt_data));
 
+  if (otpPassphrase != NULL && otpPassphrase[0] != 0) {
+    /* Apollo checks HEX(SHA256(pin + salt-as-sent + passphrase)), upper case,
+     * against the one-time PIN and passphrase shown in its web UI. */
+    size_t plain_len = strlen(pin) + strlen(salt_hex) + strlen(otpPassphrase);
+    char* plain = malloc(plain_len + 1);
+    if (plain == NULL) {
+      free(url);
+      return GS_OUT_OF_MEMORY;
+    }
+    snprintf(plain, plain_len + 1, "%s%s%s", pin, salt_hex, otpPassphrase);
+    unsigned char digest[SHA256_DIGEST_LENGTH];
+    SHA256((const unsigned char*) plain, plain_len, digest);
+    free(plain);
+    strcpy(otp_param, "&otpauth=");
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+      sprintf(otp_param + strlen(otp_param), "%02X", digest[i]);
+  }
+
   uuid_generate_random(uuid);
   uuid_unparse(uuid, uuid_str);
-  snprintf(url, url_max_len, "http://%s:%u/pair?uniqueid=%s&uuid=%s&devicename=roth&updateState=1&phrase=getservercert&salt=%s&clientcert=%s", server->serverInfo.address, server->httpPort, unique_id, uuid_str, salt_hex, cert_hex);
+  snprintf(url, url_max_len, "http://%s:%u/pair?uniqueid=%s&uuid=%s&devicename=%s&updateState=1&phrase=getservercert&salt=%s&clientcert=%s%s", server->serverInfo.address, server->httpPort, unique_id, uuid_str, device_name, salt_hex, cert_hex, otp_param);
   data = http_create_data();
   if (data == NULL)
     return GS_OUT_OF_MEMORY;
@@ -527,7 +604,7 @@ int gs_pair(PSERVER_DATA server, char* pin) {
 
   uuid_generate_random(uuid);
   uuid_unparse(uuid, uuid_str);
-  snprintf(url, url_max_len, "http://%s:%u/pair?uniqueid=%s&uuid=%s&devicename=roth&updateState=1&clientchallenge=%s", server->serverInfo.address, server->httpPort, unique_id, uuid_str, challenge_hex);
+  snprintf(url, url_max_len, "http://%s:%u/pair?uniqueid=%s&uuid=%s&devicename=%s&updateState=1&clientchallenge=%s", server->serverInfo.address, server->httpPort, unique_id, uuid_str, device_name, challenge_hex);
   if ((ret = http_request(url, data)) != GS_OK)
     goto cleanup;
 
@@ -586,7 +663,7 @@ int gs_pair(PSERVER_DATA server, char* pin) {
 
   uuid_generate_random(uuid);
   uuid_unparse(uuid, uuid_str);
-  snprintf(url, url_max_len, "http://%s:%u/pair?uniqueid=%s&uuid=%s&devicename=roth&updateState=1&serverchallengeresp=%s", server->serverInfo.address, server->httpPort, unique_id, uuid_str, challenge_response_hex);
+  snprintf(url, url_max_len, "http://%s:%u/pair?uniqueid=%s&uuid=%s&devicename=%s&updateState=1&serverchallengeresp=%s", server->serverInfo.address, server->httpPort, unique_id, uuid_str, device_name, challenge_response_hex);
   if ((ret = http_request(url, data)) != GS_OK)
     goto cleanup;
 
@@ -640,7 +717,7 @@ int gs_pair(PSERVER_DATA server, char* pin) {
 
   uuid_generate_random(uuid);
   uuid_unparse(uuid, uuid_str);
-  snprintf(url, url_max_len, "http://%s:%u/pair?uniqueid=%s&uuid=%s&devicename=roth&updateState=1&clientpairingsecret=%s", server->serverInfo.address, server->httpPort, unique_id, uuid_str, client_pairing_secret_hex);
+  snprintf(url, url_max_len, "http://%s:%u/pair?uniqueid=%s&uuid=%s&devicename=%s&updateState=1&clientpairingsecret=%s", server->serverInfo.address, server->httpPort, unique_id, uuid_str, device_name, client_pairing_secret_hex);
   if ((ret = http_request(url, data)) != GS_OK)
     goto cleanup;
 
@@ -659,7 +736,7 @@ int gs_pair(PSERVER_DATA server, char* pin) {
 
   uuid_generate_random(uuid);
   uuid_unparse(uuid, uuid_str);
-  snprintf(url, url_max_len, "https://%s:%u/pair?uniqueid=%s&uuid=%s&devicename=roth&updateState=1&phrase=pairchallenge", server->serverInfo.address, server->httpsPort, unique_id, uuid_str);
+  snprintf(url, url_max_len, "https://%s:%u/pair?uniqueid=%s&uuid=%s&devicename=%s&updateState=1&phrase=pairchallenge", server->serverInfo.address, server->httpsPort, unique_id, uuid_str, device_name);
   if ((ret = http_request(url, data)) != GS_OK)
     goto cleanup;
 
@@ -751,11 +828,15 @@ int gs_download_boxart(PSERVER_DATA server, int appId, char **out_data, size_t *
   return ret;
 }
 
-int gs_start_app(PSERVER_DATA server, STREAM_CONFIGURATION *config, int appId, bool sops, bool localaudio, int gamepad_mask) {
+int gs_start_app(PSERVER_DATA server, STREAM_CONFIGURATION *config, int appId, const char* appUuid, bool sops, bool localaudio, int gamepad_mask) {
   int ret = GS_OK;
   uuid_t uuid;
   char* result = NULL;
   char uuid_str[UUID_STRLEN];
+  /* Apollo also matches apps by UUID, which survives list reordering */
+  char app_uuid_param[16 + 64] = "";
+  if (appUuid != NULL && appUuid[0] != 0 && strlen(appUuid) < 64)
+    snprintf(app_uuid_param, sizeof(app_uuid_param), "&appuuid=%s", appUuid);
 
   /* The host configures its display from the mode in the launch request, so an
    * overriding host display mode goes there while the stream keeps its own
@@ -801,8 +882,8 @@ int gs_start_app(PSERVER_DATA server, STREAM_CONFIGURATION *config, int appId, b
   uuid_generate_random(uuid);
   uuid_unparse(uuid, uuid_str);
   int surround_info = SURROUNDAUDIOINFO_FROM_AUDIO_CONFIGURATION(config->audioConfiguration);
-  snprintf(url, sizeof(url), "https://%s:%u/%s?uniqueid=%s&uuid=%s&appid=%d&mode=%dx%dx%d&additionalStates=1&sops=%d&rikey=%s&rikeyid=%d&localAudioPlayMode=%d&surroundAudioInfo=%d&remoteControllersBitmap=%d&gcmap=%d%s%s%s",
-           server->serverInfo.address, server->httpsPort, server->currentGame ? "resume" : "launch", unique_id, uuid_str, appId, mode_width, mode_height, fps, sops, rikey_hex, rikeyid, localaudio, surround_info, gamepad_mask, gamepad_mask,
+  snprintf(url, sizeof(url), "https://%s:%u/%s?uniqueid=%s&uuid=%s&appid=%d%s&mode=%dx%dx%d&additionalStates=1&sops=%d&rikey=%s&rikeyid=%d&localAudioPlayMode=%d&surroundAudioInfo=%d&remoteControllersBitmap=%d&gcmap=%d%s%s%s",
+           server->serverInfo.address, server->httpsPort, server->currentGame ? "resume" : "launch", unique_id, uuid_str, appId, app_uuid_param, mode_width, mode_height, fps, sops, rikey_hex, rikeyid, localaudio, surround_info, gamepad_mask, gamepad_mask,
            (config->supportedVideoFormats & VIDEO_FORMAT_MASK_10BIT) ? "&hdrMode=1&clientHdrCapVersion=0&clientHdrCapSupportedFlagsInUint32=0&clientHdrCapMetaDataId=NV_STATIC_METADATA_TYPE_1&clientHdrCapDisplayData=0x0x0x0x0x0x0x0x0x0x0" : "",
            /* A host display mode only makes sense on a display sized to it, so ask Apollo for a virtual one (ignored by Sunshine). */
            host_mode_width > 0 ? "&virtualDisplay=1" : "",

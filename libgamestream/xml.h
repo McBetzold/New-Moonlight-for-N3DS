@@ -23,6 +23,10 @@
 typedef struct _APP_LIST {
   char* name;
   int id;
+  /* Apollo only; NULL / -1 on other hosts. The UUID identifies the app across
+   * list changes and idx is the host's own ordering of the list. */
+  char* uuid;
+  int idx;
   struct _APP_LIST *next;
 } APP_LIST, *PAPP_LIST;
 
@@ -34,6 +38,10 @@ typedef struct _DISPLAY_MODE {
 } DISPLAY_MODE, *PDISPLAY_MODE;
 
 int xml_search(char* data, size_t len, char* node, char** result);
+/* Collects the text of every element named `node`. On success *results is a
+ * malloc'd array of *count malloc'd strings (both to be freed by the caller);
+ * *count is 0 and *results NULL when there are none. */
+int xml_search_all(char* data, size_t len, const char* node, char*** results, int* count);
 int xml_applist(char* data, size_t len, PAPP_LIST *app_list);
 int xml_modelist(char* data, size_t len, PDISPLAY_MODE *mode_list);
 int xml_status(char* data, size_t len);

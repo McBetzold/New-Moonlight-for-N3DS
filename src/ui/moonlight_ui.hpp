@@ -79,10 +79,20 @@ struct PendingProbe {
     std::shared_ptr<ProbeResult> result;
 };
 
+struct AppInfo {
+    int id = 0;
+    std::string name;
+    std::string uuid; // Apollo only
+    int idx = -1;     // Apollo's own ordering, -1 when absent
+};
+
 struct AppsResult {
     int status = 0;
     std::string error;
-    std::vector<std::pair<int, std::string>> apps;
+    std::vector<AppInfo> apps;
+    // Apollo answered with its "Permission Denied" placeholder: this client
+    // is not allowed to list apps.
+    bool denied = false;
 };
 
 struct PendingApps {
@@ -99,7 +109,9 @@ struct ArtResult {
 struct AppEntry {
     int id = 0;
     std::string name;
-    std::string tile_name; // ellipsized for the grid tile
+    std::string uuid;        // Apollo only, "" otherwise
+    bool input_only = false; // Apollo's "Remote Input" pseudo-app (no video)
+    std::string tile_name;   // ellipsized for the grid tile
     enum class ArtState { Pending, Loading, Ready, Missing };
     ArtState art_state = ArtState::Pending;
     boxart::Texture art;
@@ -211,7 +223,12 @@ class MoonlightUi {
     void add_host_entry(const std::shared_ptr<HostEntry> &host);
     void pc_options();
     void connect_to(const std::shared_ptr<HostEntry> &host);
-    void pair_host(const std::shared_ptr<HostEntry> &host);
+    // one_time_pin: Apollo's OTP pairing, where the PIN and a passphrase
+    // generated in the host's web UI are typed on the 3DS instead.
+    void pair_host(const std::shared_ptr<HostEntry> &host,
+                   bool one_time_pin = false);
+    // Explains missing Apollo permissions; "" when nothing is missing.
+    static std::string permission_warning(const HostEntry &host);
     void unpair_host(const std::shared_ptr<HostEntry> &host);
     void delete_host(const std::shared_ptr<HostEntry> &host);
     void rename_host(const std::shared_ptr<HostEntry> &host);
@@ -286,6 +303,7 @@ class MoonlightUi {
     std::unique_ptr<PendingApps> pending_apps_;
     std::vector<std::string> app_name_lines_;
     int app_name_lines_for_ = -1;
+    bool apps_denied_ = false; // Apollo refused to list apps
 
     // settings
     std::vector<SettingRow> rows_;

@@ -23,6 +23,7 @@
 #include "ui/moonlight_ui.hpp"
 
 #include <3ds.h>
+#include <client.h>
 
 #include <exception>
 #include <malloc.h>
@@ -108,6 +109,14 @@ static int main_loop(int argc, char *argv[]) {
 
     CONFIGURATION config;
     config_parse(argc, argv, &config);
+
+    // The name hosts show for this client (Apollo keys per-client settings
+    // on it; it used to be moonlight-embedded's placeholder "roth")
+    {
+        bool is_new_3ds = false;
+        APT_CheckNew3DS(&is_new_3ds);
+        gs_set_device_name(is_new_3ds ? "New 3DS" : "3DS");
+    }
 
     {
         ui::MoonlightUi app(&config);

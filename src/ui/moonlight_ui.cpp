@@ -64,7 +64,9 @@ static std::string gs_status_text(int status) {
 }
 
 static std::string describe_server(const SERVER_DATA &server) {
-    std::string desc = server.isNvidiaSoftware ? "GeForce Experience" : "Sunshine";
+    std::string desc = server.isNvidiaSoftware ? "GeForce Experience"
+                       : server.isApollo       ? "Apollo"
+                                               : "Sunshine";
     if (server.gpuType && server.gpuType[0]) {
         desc += "  \xC2\xB7  ";
         desc += server.gpuType;
@@ -800,6 +802,19 @@ void MoonlightUi::pcs_draw_top() {
         ty += text_block(lines, tx, ty, 0.36f, color::text_faint) + 2.0f;
     }
 
+    // Apollo gives every client after the first only "view" and "list"
+    // rights; say so here instead of failing at launch with a bare 403.
+    std::string perm_warning = permission_warning(h);
+    if (!perm_warning.empty()) {
+        auto wl = wrap(perm_warning, 0.36f, cw - 156.0f);
+        if (wl.size() > 3) {
+            wl.resize(3);
+        }
+        float wy = std::min(ty, cy + ch - 8.0f - wl.size() * line_height(0.36f));
+        icon::warning(tx + 7.0f, wy + 7.0f, 13, color::warn, color::black);
+        text_block(wl, tx + 20.0f, wy, 0.36f, color::warn);
+    }
+
     std::string action = !h.status_known ? "Connect"
                          : !h.online     ? "Retry"
                          : !h.paired     ? "Pair"
@@ -1147,12 +1162,25 @@ void MoonlightUi::pc_options() {
     auto host = hosts_[sel_pc_];
     std::vector<std::string> items;
     std::vector<int> actions;
-    enum { ACT_CONNECT, ACT_PAIR, ACT_UNPAIR, ACT_RENAME, ACT_REFRESH, ACT_DELETE };
+    enum {
+        ACT_CONNECT,
+        ACT_PAIR,
+        ACT_PAIR_OTP,
+        ACT_UNPAIR,
+        ACT_RENAME,
+        ACT_REFRESH,
+        ACT_DELETE
+    };
     items.push_back("Connect");
     actions.push_back(ACT_CONNECT);
     if (host->status_known && host->online) {
         items.push_back(host->paired ? "Unpair" : "Pair");
         actions.push_back(host->paired ? ACT_UNPAIR : ACT_PAIR);
+        // Apollo can also pair from a PIN + passphrase made in its web UI
+        if (!host->paired && host->server_valid && host->server.isApollo) {
+            items.push_back("Pair with one-time PIN");
+            actions.push_back(ACT_PAIR_OTP);
+        }
     }
     items.push_back("Rename");
     actions.push_back(ACT_RENAME);
@@ -1171,6 +1199,9 @@ void MoonlightUi::pc_options() {
         break;
     case ACT_PAIR:
         pair_host(host);
+        break;
+    case ACT_PAIR_OTP:
+        pair_host(host, true);
         break;
     case ACT_UNPAIR:
         unpair_host(host);
@@ -1209,7 +1240,30 @@ void MoonlightUi::delete_host(const std::shared_ptr<HostEntry> &host) {
     toast("Deleted " + host->display_name());
 }
 
-void MoonlightUi::pair_host(const std::shared_ptr<HostEntry> &host) {
+std::string MoonlightUi::permission_warning(const HostEntry &host) {
+    if (!host.server_valid || !host.online || !host.paired ||
+        !host.server.isApollo) {
+        return "";
+    }
+    unsigned int perm = host.server.permission;
+    if (!(perm & APOLLO_PERM_LIST) && !(perm & APOLLO_PERM_LAUNCH)) {
+        return "Apollo gives this 3DS view-only access: it cannot list or "
+               "launch apps. Grant permissions on the PIN tab of Apollo's web "
+               "UI.";
+    }
+    if (!(perm & APOLLO_PERM_LAUNCH)) {
+        return "This 3DS may not launch apps. Grant \"Launch Apps\" on the "
+               "PIN tab of Apollo's web UI.";
+    }
+    if (!(perm & APOLLO_PERM_ALL_INPUTS)) {
+        return "This 3DS has no input permission, so buttons and touch will "
+               "be ignored. Grant them on the PIN tab of Apollo's web UI.";
+    }
+    return "";
+}
+
+void MoonlightUi::pair_host(const std::shared_ptr<HostEntry> &host,
+                            bool one_time_pin) {
     if (!host->server_valid || !host->online) {
         if (!probe_host_blocking(host,
                                  "Connecting to " + host->display_name())) {
@@ -1224,18 +1278,44 @@ void MoonlightUi::pair_host(const std::shared_ptr<HostEntry> &host) {
         return;
     }
 
-    char pin_buf[8];
-    snprintf(pin_buf, sizeof(pin_buf), "%04u", (unsigned)(rand() % 10000));
-    std::string pin = pin_buf;
+    std::string pin;
+    std::string passphrase;
+    if (one_time_pin) {
+        // Apollo's PIN tab can generate a one-time PIN and passphrase; the
+        // host then accepts the pairing without anyone typing on the PC.
+        if (!prompt_text("One-time PIN shown by Apollo (4 digits)", "", pin,
+                         8)) {
+            return;
+        }
+        pin.erase(std::remove_if(pin.begin(), pin.end(),
+                                 [](unsigned char c) { return !isdigit(c); }),
+                  pin.end());
+        if (pin.size() != 4) {
+            show_error("Invalid PIN", "The one-time PIN is four digits.");
+            return;
+        }
+        if (!prompt_text("Passphrase shown next to the PIN", "", passphrase,
+                         64) ||
+            passphrase.empty()) {
+            return;
+        }
+    } else {
+        char pin_buf[8];
+        snprintf(pin_buf, sizeof(pin_buf), "%04u",
+                 (unsigned)(rand() % 10000));
+        pin = pin_buf;
+    }
 
     auto status = std::make_shared<int>(GS_FAILED);
     auto error = std::make_shared<std::string>();
-    auto job = Worker::instance().post([host, pin, status, error] {
+    auto job = Worker::instance().post([host, pin, passphrase, status,
+                                        error] {
         // Pairing waits for the user to type the PIN on the PC
         http_set_timeout_s(3 * 60);
         http_set_connect_timeout_s(10);
         std::string pin_copy = pin;
-        *status = gs_pair(&host->server, &pin_copy[0]);
+        *status = gs_pair(&host->server, &pin_copy[0],
+                          passphrase.empty() ? nullptr : passphrase.c_str());
         http_set_timeout_s(60);
         if (*status != GS_OK) {
             *error = gs_error ? gs_error : "Pairing failed";
@@ -1244,11 +1324,20 @@ void MoonlightUi::pair_host(const std::shared_ptr<HostEntry> &host) {
 
     Modal m;
     m.title = "Pairing with " + host->display_name();
-    m.message =
-        "Enter this PIN on the host PC. With Sunshine, open the web UI and "
-        "use the PIN page. This dialog closes when pairing completes.";
-    m.big_text = pin;
-    m.busy_text = "Waiting for the PIN to be entered on the PC";
+    if (one_time_pin) {
+        m.message =
+            "Checking the one-time PIN and passphrase with the PC. They "
+            "expire a few minutes after Apollo generates them, so make new "
+            "ones if this fails.";
+        m.busy_text = "Pairing with the one-time PIN";
+    } else {
+        m.message =
+            "Enter this PIN on the host PC. With Sunshine or Apollo, open the "
+            "web UI and use the PIN page. This dialog closes when pairing "
+            "completes.";
+        m.big_text = pin;
+        m.busy_text = "Waiting for the PIN to be entered on the PC";
+    }
     if (!wait_job(job, m)) {
         return;
     }
@@ -1271,9 +1360,9 @@ void MoonlightUi::unpair_host(const std::shared_ptr<HostEntry> &host) {
         Modal m;
         m.title = "Unpair from " + host->display_name();
         m.message =
-            "Sunshine hosts can only be unpaired from the host PC: open the "
-            "Sunshine web UI, go to PIN Pairing and remove this device "
-            "(\"roth\") from the paired clients, then refresh here.";
+            "Sunshine and Apollo hosts can only be unpaired from the host "
+            "PC: open the web UI, go to the PIN page and remove this device "
+            "(\"New 3DS\") from the paired clients, then refresh here.";
         m.buttons = {"OK"};
         show_modal(m);
         return;
@@ -1448,10 +1537,15 @@ void MoonlightUi::apps_draw_top() {
                 false);
 
     if (apps_.empty()) {
-        text("No apps found", TOP_W / 2.0f, 90.0f, 0.55f, color::text,
-             C2D_AlignCenter);
-        auto lines = wrap("Add apps in the Sunshine web UI under "
-                          "Applications, then press Y to refresh.",
+        text(apps_denied_ ? "Not allowed to list apps" : "No apps found",
+             TOP_W / 2.0f, 90.0f, 0.55f, color::text, C2D_AlignCenter);
+        auto lines = wrap(apps_denied_
+                              ? "Apollo gives new clients view-only access. "
+                                "On the PIN tab of Apollo's web UI, give "
+                                "\"New 3DS\" the List Apps and Launch Apps "
+                                "permissions, then press Y to refresh."
+                              : "Add apps in the Sunshine web UI under "
+                                "Applications, then press Y to refresh.",
                           0.42f, TOP_W - 80.0f);
         text_block(lines, TOP_W / 2.0f, 118.0f, 0.42f, color::text_dim,
                    C2D_AlignCenter);
@@ -1499,6 +1593,10 @@ void MoonlightUi::apps_draw_top() {
     if (running) {
         float pw = pill(tx, ty, "Running", 0.38f, color::ok, color::black);
         (void)pw;
+    } else if (app.input_only) {
+        // Apollo's Remote Input: no video, the 3DS just acts as a controller
+        pill(tx, ty, "Input only, no video", 0.38f, color::accent_dim,
+             color::text);
     } else if (cur_host_ && cur_host_->current_game) {
         pill(tx, ty, "Another app is running", 0.38f, color::card_hi,
              color::text_dim);
@@ -1596,20 +1694,41 @@ bool MoonlightUi::load_apps(const std::shared_ptr<HostEntry> &host,
             if (result->status != GS_OK) {
                 result->error = gs_status_text(result->status);
             }
+            bool host_order = false;
             while (list != NULL) {
                 PAPP_LIST next = list->next;
-                result->apps.push_back(
-                    {list->id, list->name ? std::string(list->name) : ""});
+                AppInfo info;
+                info.id = list->id;
+                info.name = list->name ? std::string(list->name) : "";
+                info.uuid = list->uuid ? std::string(list->uuid) : "";
+                info.idx = list->idx;
+                host_order = host_order || info.idx > 0;
+                result->apps.push_back(info);
                 free(list->name);
+                free(list->uuid);
                 free(list);
                 list = next;
             }
-            std::sort(result->apps.begin(), result->apps.end(),
-                      [](const std::pair<int, std::string> &a,
-                         const std::pair<int, std::string> &b) {
-                          return strcasecmp(a.second.c_str(),
-                                            b.second.c_str()) < 0;
-                      });
+            // Apollo answers a client without the List Apps permission with
+            // one placeholder entry.
+            if (result->apps.size() == 1 &&
+                result->apps[0].id == APOLLO_PERMISSION_DENIED_APP_ID) {
+                result->denied = true;
+                result->apps.clear();
+            }
+            if (host_order) {
+                // Apollo sends the order the user arranged in its web UI
+                std::sort(result->apps.begin(), result->apps.end(),
+                          [](const AppInfo &a, const AppInfo &b) {
+                              return a.idx < b.idx;
+                          });
+            } else {
+                std::sort(result->apps.begin(), result->apps.end(),
+                          [](const AppInfo &a, const AppInfo &b) {
+                              return strcasecmp(a.name.c_str(),
+                                                b.name.c_str()) < 0;
+                          });
+            }
         },
         !interactive);
 
@@ -1637,10 +1756,14 @@ void MoonlightUi::apply_apps(const std::shared_ptr<HostEntry> &host,
     Worker::instance().drop_background();
     std::vector<AppEntry> fresh;
     fresh.reserve(result.apps.size());
+    apps_denied_ = result.denied;
     for (const auto &entry : result.apps) {
         AppEntry app;
-        app.id = entry.first;
-        app.name = entry.second;
+        app.id = entry.id;
+        app.name = entry.name;
+        app.uuid = entry.uuid;
+        app.input_only = strcasecmp(entry.uuid.c_str(),
+                                    APOLLO_REMOTE_INPUT_UUID) == 0;
         app.tile_name = ellipsize(app.name, 0.36f, APP_W - 4.0f);
         // Keep already-loaded art for apps that are still present
         for (auto &old : apps_) {

@@ -41,6 +41,17 @@ Press `START` or tap the gear icon to open the settings page. It is grouped like
 You can modify documented settings either in the app, or by creating/modifying the config file located at `sd:/3ds/moonlight/moonlight.conf`.
 The default settings are recommended for \*New\* 3DS users. The PC list is stored in `sd:/3ds/moonlight/hosts.conf`.
 
+### Apollo hosts
+
+[Apollo](https://github.com/ClassicOldSong/Apollo) is a Sunshine fork with a built-in virtual display and a few extras of its own. Moonlight for 3DS uses them when it sees an Apollo host; Sunshine and GeForce Experience hosts are unaffected.
+
+- **Client name.** The 3DS pairs as `New 3DS` (or `3DS` on an original model) instead of moonlight-embedded's old placeholder `roth`, so it is easy to find in Apollo's client list, where per-client settings such as the display mode override and permissions live.
+- **Permissions.** Apollo gives every client after the first only *view streams* and *list apps*. The PC card and the app list say so, and the launcher explains what to enable, instead of failing with a bare "Permission denied". Grant permissions on the PIN tab of Apollo's web UI.
+- **One-time PIN pairing.** Apollo's PIN tab can generate a PIN and a passphrase; choose `Pair with one-time PIN` from the PC's options menu and type them on the 3DS. Nobody has to type anything on the PC. The normal pairing flow still works too.
+- **Server commands.** Commands the host admin defines under *Server Commands* in Apollo's web UI appear in the stream menu under `COMMANDS` when this client has the *Server Command* permission; tap one to run it on the PC. A command that toggles a ReShade preset, for example, switches 3D on and off without touching the PC.
+- **App order and identity.** The app grid follows the order set in Apollo's web UI, and apps are launched by their UUID as well as their ID.
+- **Input only.** With *Input only mode* enabled in Apollo, a `Remote Input` entry appears in the app list. Streaming it sends no video: the 3DS just acts as a controller, touchpad and keyboard for the PC.
+
 ### PC games that won't run below HD
 
 Apollo (and Sunshine with display-mode changes on) sizes the host display from the resolution in the launch request, so a plain 800x480 or 400x240 stream gives Windows and the game a monitor that small. Many games refuse to start below HD or fall back to a window. The **800x480 (PC games, experimental)** preset exists for them: it keeps the 800x480 stream but asks the host for a 1920x1152 display, the same 5:3 shape as the top screen. Apollo creates its virtual display at that size and scales every frame down, so the game sees an ordinary HD monitor and nothing changes on the 3DS. The request also carries `virtualDisplay=1`, so Apollo uses a virtual display even if the app is not configured for one (Sunshine ignores it). The same host size can be typed after the stream size when entering a custom resolution, and in `moonlight.conf` it is `host_width = 1920` / `host_height = 1152` (0 = same as the stream). Keep the host display the same shape as the stream, or the host adds black bars; the settings page warns when the shapes differ.
@@ -78,9 +89,12 @@ If you are using VS Code as your editor, you can use the `Build Docker` and `Run
 If you are not using VS Code, you can build and run the docker image with the following terminal commands from the root of the repository:
 
 ```bash
+sh 3ds/apply-patches.sh
 docker build --network=host -t moonlight-n3ds .
 docker run --rm -it -v .:/moonlight-N3DS -w /moonlight-N3DS moonlight-n3ds:latest
 ```
+
+The first line applies the small patches in `patches/` to the git submodules (moonlight-common-c gains Apollo's server-command packet). It only needs to run once after cloning and is safe to repeat; the GitHub Actions workflow runs it too.
 
 Then, run the following command in the docker commandline:
 
