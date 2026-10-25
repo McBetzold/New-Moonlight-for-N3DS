@@ -68,7 +68,9 @@ bool gfx_init() {
     // program object again, so without this the shader is never re-sent and
     // the GPU keeps running the video renderer's vertex shader after a
     // stream. Binding a different (valid) program first makes citro2d's
-    // rebind count as a change.
+    // rebind count as a change. gfx_fini() leaves the scratch program as the
+    // remembered one, so on later calls this bind is a no-op and citro2d's
+    // bind below is the change.
     if (!g_scratch_dvlb) {
         g_scratch_dvlb =
             DVLB_ParseFile((u32 *)vshader_shbin, vshader_shbin_size);
@@ -133,6 +135,16 @@ void gfx_fini() {
     C3D_RenderTargetDelete(g_top);
     C3D_RenderTargetDelete(g_bottom);
     g_top = g_bottom = nullptr;
+    // citro3d remembers the last bound program across C3D_Fini/C3D_Init and
+    // compares the next bind against it, reading the old program's vertex
+    // shader. C2D_Fini frees citro2d's shader instance but leaves its
+    // program bound, so the first bind in gfx_init() after a stream read
+    // freed memory, which crashed (data abort in C3D_BindProgram) whenever
+    // the block had been reused, e.g. by the connection-terminated message.
+    // Leave our scratch program, which is never freed, as the remembered one.
+    if (g_scratch_dvlb) {
+        C3D_BindProgram(&g_scratch_program);
+    }
     C2D_Fini();
     C3D_Fini();
     g_ready = false;
