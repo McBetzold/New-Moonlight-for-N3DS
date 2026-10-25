@@ -360,6 +360,16 @@ void MoonlightUi::settings_build() {
                                "mode. It has no effect while 3D mode is off.");
         }
     };
+    {
+        SettingRow r;
+        r.type = SettingRow::Link;
+        r.label = "3D setup guide";
+        r.desc = "Step-by-step help for getting games, emulators and videos on "
+                 "your PC to send 3D the 3DS can show, and how to check the "
+                 "picture before raising the slider.";
+        r.activate = [this] { show_stereo_guide(); };
+        rows_.push_back(r);
+    }
 
     header("Audio Settings");
     toggle("Play audio on host PC",
@@ -563,6 +573,10 @@ void MoonlightUi::settings_update(const Input &in) {
                        was_selected) {
                 r.activate();
                 return;
+            } else if (r.type == SettingRow::Link && r.activate) {
+                // Behaves like a button: one tap opens it
+                r.activate();
+                return;
             }
         }
     }
@@ -634,6 +648,9 @@ void MoonlightUi::settings_draw_top() {
         break;
     case SettingRow::Number:
         hints.push_back({"A", "Edit"});
+        break;
+    case SettingRow::Link:
+        hints.push_back({"A", "Open"});
         break;
     default:
         break;
@@ -719,6 +736,18 @@ void MoonlightUi::settings_draw_bottom() {
                     rrect(track_x, track_y - 2, track_w * f, 4, 2, color::accent);
                     circle(track_x + track_w * f, track_y, 6,
                            sel ? color::accent_text : color::text);
+                    break;
+                }
+                case SettingRow::Link: {
+                    // "Open" and a right-pointing chevron, like a menu entry
+                    float vx = LIST_X + LIST_W - 12.0f;
+                    float cyc = y + h / 2.0f;
+                    u32 c = sel ? color::accent_text : color::text_faint;
+                    line(vx - 7, cyc - 5, vx - 2, cyc, 2.0f, c);
+                    line(vx - 2, cyc, vx - 7, cyc + 5, 2.0f, c);
+                    text("Open", vx - 14.0f, y + (h - line_height(0.4f)) / 2.0f,
+                         0.4f, sel ? color::accent_text : color::text_dim,
+                         C2D_AlignRight);
                     break;
                 }
                 default:
