@@ -19,7 +19,16 @@ jobs:
       - name: Build Dockerfile
         run: docker build --network=host -t moonlight-n3ds .
       - name: Build CIA
-        run: docker run --rm -v .:/moonlight-N3DS -w /moonlight-N3DS moonlight-n3ds:latest make
+        # The full make output is kept as an artifact so a failed build can be
+        # diagnosed without access to the job log.
+        run: docker run --rm -v .:/moonlight-N3DS -w /moonlight-N3DS moonlight-n3ds:latest bash -c "make 2>&1 | tee build.log; exit \${PIPESTATUS[0]}"
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.repository.name }}-buildlog
+          path: ./build.log
+          if-no-files-found: ignore
       - name: Export symbols
         # Sorted symbol table so a crash screen's PC/LR can be mapped to a
         # function without the toolchain (the code segment loads at 0x100000).
