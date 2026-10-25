@@ -47,3 +47,13 @@ void apt_state_init(void) {
 }
 
 bool apt_state_suspended(void) { return s_suspended; }
+
+static volatile bool s_home_requested = false;
+
+void apt_state_request_home(void) { s_home_requested = true; }
+
+bool apt_state_take_home_request(void) {
+    bool requested = s_home_requested;
+    s_home_requested = false;
+    return requested;
+}

@@ -27,8 +27,7 @@ After modding your 3DS and installing the Moonlight CIA, open the Moonlight appl
 - Move with the D-pad or Circle Pad, or tap a tile. Press `A` (or tap the highlighted tile) to launch the app; if it is already running the stream resumes instead. A green badge marks the running app, and `X` (or `Quit app`) closes it on the PC.
 - While the stream starts, the top screen shows the connection stages (RTSP handshake, control stream, video stream...). Once video arrives, the bottom screen shows the in-stream menu offering view/control options. Touch any of these buttons to select a streaming view.
 - NOTE: You can re-open the streaming menu any time during the stream by pressing the 3DS's HOME button.
-    - Pressing the HOME button from the menu will return you to the 3DS's home menu.
-    - The stream will remain active while you are in the 3DS home menu, but closing the app will close the stream.
+    - Pressing the HOME button again from the menu ends the stream (the app keeps running on the PC) and returns you to the 3DS HOME Menu, like the Android app does when it is sent to the background. Reopen Moonlight and press A on the app to resume.
 - NOTE: When the Magnify view is active, you can lock the region you are magnifying by holding either of the shoulder buttons (L or R).
     - When the view is locked, you can use the touchscreen to click, drag, and release items in the selected region of the screen (similar to the Mirror and Stretch views)
 

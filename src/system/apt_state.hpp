@@ -31,6 +31,11 @@ void apt_state_init(void);
 // True between the suspend/sleep notification and the matching restore.
 bool apt_state_suspended(void);
 
+// HOME pressed while streaming: the stream is ended first and the launcher
+// performs the jump to the HOME Menu once the GPU is back in its hands.
+void apt_state_request_home(void);
+bool apt_state_take_home_request(void);
+
 #ifdef __cplusplus
 }
 #endif
