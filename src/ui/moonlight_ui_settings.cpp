@@ -43,24 +43,42 @@ static const int BITRATE_STEP = 500;
 struct ResolutionPreset {
     int width;
     int height;
+    // Display mode asked of the host; 0 = same as the stream. Apollo creates
+    // its virtual display at this size and scales the picture down to the
+    // stream, so PC games see a normal monitor instead of a tiny one.
+    int host_width;
+    int host_height;
     const char *label;
 };
 
 static const ResolutionPreset PRESETS[] = {
-    {400, 240, "Games (400x240)"},
-    {800, 480, "Desktop (800x480)"},
-    {640, 480, "Bottom-screen views (640x480)"},
-    {320, 240, "Bottom-screen 1:1 (320x240)"},
+    {400, 240, 0, 0, "400x240 (Games)"},
+    {800, 480, 0, 0, "800x480 (Desktop)"},
+    {800, 480, 1920, 1152, "800x480 (PC games, 1920x1152 host)"},
+    {640, 480, 0, 0, "640x480 (Bottom-screen views)"},
+    {320, 240, 0, 0, "320x240 (Bottom-screen 1:1)"},
 };
 static const int PRESET_COUNT = sizeof(PRESETS) / sizeof(PRESETS[0]);
 
-static int preset_index(int w, int h) {
+static bool host_mode_set(const CONFIGURATION *cfg) {
+    return cfg->host_width > 0 && cfg->host_height > 0;
+}
+
+static int preset_index(const CONFIGURATION *cfg) {
+    int hw = host_mode_set(cfg) ? cfg->host_width : 0;
+    int hh = host_mode_set(cfg) ? cfg->host_height : 0;
     for (int i = 0; i < PRESET_COUNT; i++) {
-        if (PRESETS[i].width == w && PRESETS[i].height == h) {
+        if (PRESETS[i].width == cfg->stream.width &&
+            PRESETS[i].height == cfg->stream.height &&
+            PRESETS[i].host_width == hw && PRESETS[i].host_height == hh) {
             return i;
         }
     }
     return -1;
+}
+
+static std::string size_text(int w, int h) {
+    return std::to_string(w) + "x" + std::to_string(h);
 }
 
 static std::string bitrate_text(int kbps) {
@@ -85,19 +103,43 @@ std::string MoonlightUi::resolution_warning() const {
     if (config_->stream.width > 1024 || config_->stream.height > 512) {
         warning += "Streams larger than 1024x512 cannot be displayed. ";
     }
+    if (host_mode_set(config_) &&
+        config_->host_width * config_->stream.height !=
+            config_->host_height * config_->stream.width) {
+        warning += "Host display and stream have different shapes; the host "
+                   "will add black bars. ";
+    }
     return warning;
 }
 
 void MoonlightUi::settings_edit_resolution() {
     int w = config_->stream.width, h = config_->stream.height;
+    int hw = config_->host_width, hh = config_->host_height;
     if (!prompt_number("Stream width in pixels", w, w)) {
         return;
     }
     if (!prompt_number("Stream height in pixels", h, h)) {
         return;
     }
+    if (!prompt_number("Host display width (0 = same as stream)", hw, hw)) {
+        return;
+    }
+    if (hw > 0) {
+        // Suggest the height that keeps the stream's shape
+        int suggested = hh > 0 ? hh : (w > 0 ? hw * h / w : hw);
+        if (!prompt_number("Host display height", suggested, hh)) {
+            return;
+        }
+    }
     config_->stream.width = w;
     config_->stream.height = h;
+    if (hw > 0 && hh > 0) {
+        config_->host_width = hw;
+        config_->host_height = hh;
+    } else {
+        config_->host_width = 0;
+        config_->host_height = 0;
+    }
 }
 
 void MoonlightUi::settings_build() {
@@ -127,22 +169,25 @@ void MoonlightUi::settings_build() {
         SettingRow r;
         r.type = SettingRow::Choice;
         r.label = "Resolution";
-        r.desc = "400x240 is pixel-exact on the top screen and the lightest "
-                 "to decode: best for games. 800x480 keeps the top screen's "
-                 "shape and gives the desktop room; the Stretch view shows "
-                 "its halves at the same scale on both screens. 640x480 "
-                 "matches the bottom screen for the Mirror view. Larger than "
-                 "1024x512 cannot be shown. A to type a custom size.";
+        r.desc = "400x240: lightest to decode. 800x480: the top screen's "
+                 "shape with room for the desktop. PC games: streams 800x480 "
+                 "but asks the host for a 1920x1152 display, so games that "
+                 "reject tiny screens run and Apollo scales the picture down. "
+                 "A: custom size.";
         r.value = [cfg] {
-            int i = preset_index(cfg->stream.width, cfg->stream.height);
+            int i = preset_index(cfg);
             if (i >= 0) {
                 return std::string(PRESETS[i].label);
             }
-            return std::to_string(cfg->stream.width) + "x" +
-                   std::to_string(cfg->stream.height) + " (custom)";
+            std::string v = size_text(cfg->stream.width, cfg->stream.height);
+            if (host_mode_set(cfg)) {
+                v += ", " + size_text(cfg->host_width, cfg->host_height) +
+                     " host";
+            }
+            return v + " (custom)";
         };
         r.adjust = [cfg](int dir) {
-            int i = preset_index(cfg->stream.width, cfg->stream.height);
+            int i = preset_index(cfg);
             if (i < 0) {
                 i = dir > 0 ? 0 : PRESET_COUNT - 1;
             } else {
@@ -150,6 +195,8 @@ void MoonlightUi::settings_build() {
             }
             cfg->stream.width = PRESETS[i].width;
             cfg->stream.height = PRESETS[i].height;
+            cfg->host_width = PRESETS[i].host_width;
+            cfg->host_height = PRESETS[i].host_height;
         };
         r.activate = [this] { settings_edit_resolution(); };
         rows_.push_back(r);

@@ -41,18 +41,23 @@
 namespace ui {
 
 static std::string start_app_error(int status, const std::string &gs_err,
-                                   const STREAM_CONFIGURATION &stream) {
+                                   const CONFIGURATION &cfg) {
+    const STREAM_CONFIGURATION &stream = cfg.stream;
+    // The host judges the display mode it was asked for, which is the host
+    // display mode when one is set and the stream size otherwise.
+    bool host_mode = cfg.host_width > 0 && cfg.host_height > 0;
+    int mode_w = host_mode ? cfg.host_width : stream.width;
+    int mode_h = host_mode ? cfg.host_height : stream.height;
     switch (status) {
     case GS_NOT_SUPPORTED_4K:
         return "The host does not support 4K streaming.";
     case GS_NOT_SUPPORTED_MODE:
-        return "The host does not support " + std::to_string(stream.width) +
-               "x" + std::to_string(stream.height) + " at " +
-               std::to_string(stream.fps) + " fps.";
+        return "The host does not support " + std::to_string(mode_w) + "x" +
+               std::to_string(mode_h) + " at " + std::to_string(stream.fps) +
+               " fps.";
     case GS_NOT_SUPPORTED_SOPS_RESOLUTION:
         return "Optimal Playable Settings are not supported for " +
-               std::to_string(stream.width) + "x" +
-               std::to_string(stream.height) +
+               std::to_string(mode_w) + "x" + std::to_string(mode_h) +
                ". Use a supported resolution or turn off 'Optimize game "
                "settings'.";
     case GS_ERROR:
@@ -93,6 +98,7 @@ void MoonlightUi::launch_app(int index) {
     int app_id = app.id;
     auto job = Worker::instance().post([host, cfg, app_id, status, error] {
         http_set_timeout_s(30);
+        gs_set_host_display_mode(cfg->host_width, cfg->host_height);
         *status = gs_start_app(&host->server, &cfg->stream, app_id, cfg->sops,
                                cfg->localaudio, 1);
         http_set_timeout_s(60);
@@ -111,7 +117,7 @@ void MoonlightUi::launch_app(int index) {
     }
     if (*status != GS_OK) {
         show_error("Unable to start " + app.name,
-                   start_app_error(*status, *error, config_->stream));
+                   start_app_error(*status, *error, *config_));
         return;
     }
     host->current_game = app.id;
