@@ -47,10 +47,10 @@ struct ResolutionPreset {
 };
 
 static const ResolutionPreset PRESETS[] = {
-    {400, 240, "400x240 - games (sharpest, lightest)"},
-    {800, 480, "800x480 - desktop and Stretch view"},
-    {640, 480, "640x480 - Mirror view (4:3)"},
-    {320, 240, "320x240 - bottom screen 1:1"},
+    {400, 240, "Games (400x240)"},
+    {800, 480, "Desktop (800x480)"},
+    {640, 480, "Bottom-screen views (640x480)"},
+    {320, 240, "Bottom-screen 1:1 (320x240)"},
 };
 static const int PRESET_COUNT = sizeof(PRESETS) / sizeof(PRESETS[0]);
 
