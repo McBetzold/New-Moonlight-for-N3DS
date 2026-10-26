@@ -63,4 +63,8 @@ class N3dsInput : public ISubscriber {
     u64 start_held_since = 0;   // system ticks, 0 = not held
     bool start_hold_handled = false;
     float mouse_remainder_x = 0, mouse_remainder_y = 0;
+
+    // Hold L3 while the Circle Pad is pushed nearly all the way
+    bool auto_sprint = false;
+    bool sprint_active = false;
 };

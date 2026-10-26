@@ -436,11 +436,16 @@ void MoonlightUi::settings_build() {
            "left and right mouse buttons instead, which pairs well with the "
            "touchpad view.",
            &cfg->use_triggers_for_mouse);
-    toggle("Hold START for mouse",
+    toggle("C-stick mouse (hold START)",
            "Holding START for a second switches the C-stick to moving the "
-           "mouse, with the LT and RT buttons as its clicks. Hold START again "
-           "to go back.",
+           "mouse, with the LT and RT buttons as its clicks; a pointer icon "
+           "shows while it is on. Hold START again to go back.",
            &cfg->cstick_mouse);
+    toggle("Auto-sprint (L3)",
+           "Holds L3 while the Circle Pad is pushed nearly all the way, so "
+           "shooters sprint without clicking the stick. Partial pushes still "
+           "walk. Games with tap-to-sprint start sprinting on the push.",
+           &cfg->auto_sprint);
 
     // ---- what each button sends
     header("Button Mapping");

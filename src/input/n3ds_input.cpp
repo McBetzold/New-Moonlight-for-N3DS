@@ -53,6 +53,7 @@ N3dsInput::N3dsInput(int image_width, int image_height,
     use_triggers_for_mouse = cfg.use_triggers_for_mouse;
     motion_controls = cfg.motion_controls;
     cstick_mouse_enabled = cfg.cstick_mouse;
+    auto_sprint = cfg.auto_sprint;
     // The button and gamepad-view mapping used for this stream
     ButtonMapping::set_active(&cfg);
     _add_gamepad();
@@ -217,6 +218,23 @@ void N3dsInput::n3dsinput_handle_event() {
     hidCircleRead(&cpad_pos);
     gamepad_state.leftStickX = scale_n3ds_axis(cpad_pos.dx, N3DS_ANALOG_MAX);
     gamepad_state.leftStickY = scale_n3ds_axis(cpad_pos.dy, N3DS_ANALOG_MAX);
+
+    // Auto-sprint: hold L3 while the Circle Pad is pushed nearly all the way,
+    // with some hysteresis so it does not flicker at the edge. Partial pushes
+    // still walk.
+    if (auto_sprint) {
+        float mag = sqrtf((float)(cpad_pos.dx * cpad_pos.dx +
+                                  cpad_pos.dy * cpad_pos.dy)) /
+                    N3DS_ANALOG_MAX;
+        if (!sprint_active && mag > 0.85f) {
+            sprint_active = true;
+        } else if (sprint_active && mag < 0.70f) {
+            sprint_active = false;
+        }
+        if (sprint_active) {
+            gamepad_state.buttons |= LS_CLK_FLAG;
+        }
+    }
 
     circlePosition cstick_pos;
     hidCstickRead(&cstick_pos);

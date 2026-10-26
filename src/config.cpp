@@ -64,6 +64,7 @@ static struct option long_options[] = {
     {"cstick_mouse", required_argument, NULL, 'K'},
     {"button_map", required_argument, NULL, 'L'},
     {"touch_map", required_argument, NULL, 'M'},
+    {"auto_sprint", required_argument, NULL, 'N'},
     {0, 0, 0, 0},
 };
 
@@ -192,6 +193,9 @@ void parse_argument(int c, char *value, PCONFIGURATION config) {
     case 'M':
         ButtonMapping::parse_touch_map(config, value);
         break;
+    case 'N':
+        config->auto_sprint = ((value != NULL) && (strcmp(value, "true") == 0));
+        break;
     case 1:
         if (config->action == NULL)
             config->action = value;
@@ -263,6 +267,7 @@ void config_save(char *filename, PCONFIGURATION config) {
     write_config_bool(fd, "auto_reconnect", config->auto_reconnect);
     write_config_bool(fd, "resume_on_start", config->resume_on_start);
     write_config_bool(fd, "cstick_mouse", config->cstick_mouse);
+    write_config_bool(fd, "auto_sprint", config->auto_sprint);
 
     if (strcmp(config->app, "Steam") != 0)
         write_config_string(fd, "app", config->app);
@@ -311,6 +316,7 @@ void config_parse(int argc, char *argv[], PCONFIGURATION config) {
     config->auto_reconnect = true;
     config->resume_on_start = false;
     config->cstick_mouse = true;
+    config->auto_sprint = false;
     ButtonMapping::set_defaults(config);
     config->button_map_from_file = false;
 
