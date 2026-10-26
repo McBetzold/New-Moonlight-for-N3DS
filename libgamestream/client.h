@@ -79,6 +79,8 @@ typedef struct _SERVER_DATA {
 
 /* App UUID Apollo gives its "Remote Input" (input only, no video) pseudo-app */
 #define APOLLO_REMOTE_INPUT_UUID "8CB5C136-DA67-4F99-B4A1-F9CD35005CF4"
+/* App UUID of Apollo's "Terminate" pseudo-app (listed in Input Only Mode) */
+#define APOLLO_TERMINATE_UUID "E16CBE1B-295D-4632-9A76-EC4180C857D3"
 /* App ID of the single "Permission Denied" entry Apollo lists when the client
  * may not list apps */
 #define APOLLO_PERMISSION_DENIED_APP_ID 114514

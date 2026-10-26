@@ -913,6 +913,9 @@ void MoonlightUi::probe_host(const std::shared_ptr<HostEntry> &host,
                 result->ok = true;
                 result->paired = server.paired;
                 result->current_game = server.currentGame;
+                if (server.currentGameUuid && server.currentGameUuid[0]) {
+                    result->running_uuid = server.currentGameUuid;
+                }
                 if (server.hostname && server.hostname[0]) {
                     result->hostname = server.hostname;
                 }
@@ -935,6 +938,8 @@ void MoonlightUi::apply_probe(PendingProbe &probe) {
     if (r.ok) {
         h.paired = r.paired;
         h.current_game = r.current_game;
+        h.running_uuid = r.running_uuid;
+        resolve_running_app(h);
         h.server = r.server;
         h.server_valid = true;
         h.server_desc = r.desc;
@@ -1660,6 +1665,24 @@ int MoonlightUi::apps_hit(float tx, float ty) const {
                     APP_H, APP_GAP_X, APP_GAP_Y, app_scroll_);
 }
 
+void MoonlightUi::resolve_running_app(HostEntry &host) {
+    if (host.current_game > 0 || host.running_uuid.empty()) {
+        return;
+    }
+    // Apollo's Remote Input reports a real ID; anything else found by UUID
+    host.current_game = -1; // running, ID unknown until the list is loaded
+    if (cur_host_.get() != &host) {
+        return;
+    }
+    for (const auto &a : apps_) {
+        if (!a.uuid.empty() &&
+            strcasecmp(a.uuid.c_str(), host.running_uuid.c_str()) == 0) {
+            host.current_game = a.id;
+            return;
+        }
+    }
+}
+
 std::string MoonlightUi::running_app_name() const {
     if (!cur_host_ || cur_host_->current_game == 0) {
         return "";
@@ -1904,7 +1927,13 @@ bool MoonlightUi::load_apps(const std::shared_ptr<HostEntry> &host,
                 info.uuid = list->uuid ? std::string(list->uuid) : "";
                 info.idx = list->idx;
                 host_order = host_order || info.idx > 0;
-                result->apps.push_back(info);
+                // Apollo's "Terminate" entry (Input Only Mode) quits the
+                // running app; the Quit app button does the same, so leave
+                // it out of the grid
+                if (strcasecmp(info.uuid.c_str(), APOLLO_TERMINATE_UUID) !=
+                    0) {
+                    result->apps.push_back(info);
+                }
                 free(list->name);
                 free(list->uuid);
                 free(list);
@@ -1981,6 +2010,7 @@ void MoonlightUi::apply_apps(const std::shared_ptr<HostEntry> &host,
     free_boxart();
     apps_ = std::move(fresh);
     cur_host_ = host;
+    resolve_running_app(*host);
     apps_select(sel_app_);
     app_name_lines_for_ = -1;
     for (auto &app : apps_) {
@@ -2074,6 +2104,7 @@ bool MoonlightUi::quit_running_app(const std::shared_ptr<HostEntry> &host) {
         return false;
     }
     host->current_game = 0;
+    host->running_uuid.clear();
     host->server.currentGame = 0;
     toast("App closed");
     return true;

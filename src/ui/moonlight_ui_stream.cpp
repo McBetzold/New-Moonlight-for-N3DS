@@ -77,7 +77,10 @@ void MoonlightUi::launch_app(int index) {
     AppEntry app = apps_[index]; // copy: apps_ may be rebuilt afterwards
     app.art = boxart::Texture(); // the copy must not own the texture
 
-    if (host->current_game != 0 && host->current_game != app.id) {
+    // Apollo's Remote Input runs alongside the running app, so it never
+    // needs that app to quit first
+    if (host->current_game != 0 && host->current_game != app.id &&
+        !app.input_only) {
         if (!confirm("Quit " + running_app_name() + "?",
                      running_app_name() + " is running on " +
                          host->display_name() + ". Quit it and launch " +
