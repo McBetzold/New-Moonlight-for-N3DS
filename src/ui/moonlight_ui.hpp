@@ -297,6 +297,7 @@ class MoonlightUi {
     void show_guide(const std::string &title, const GuidePage *pages,
                     int count);
     void show_stereo_guide();
+    void show_wol_guide();
 
     PCONFIGURATION config_;
     View view_ = View::Pcs;

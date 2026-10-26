@@ -234,6 +234,11 @@ StreamOutcome MoonlightUi::run_stream(const std::shared_ptr<HostEntry> &host,
     default:
         break;
     }
+    // Apollo's Remote Input sends no picture (one placeholder frame), so
+    // skip the decoder and show a status panel on the top screen instead
+    if (app.input_only) {
+        video_callbacks = &decoder_callbacks_mock;
+    }
     // Read by the top-screen renderer, which is created once video starts
     N3dsRendererBase::set_stereo_options(cfg->stereo_3d, cfg->swap_eyes);
     // Apollo's server commands, shown by the stream menu's Commands view
@@ -322,7 +327,8 @@ StreamOutcome MoonlightUi::run_stream(const std::shared_ptr<HostEntry> &host,
                   ".";
         n3ds_connection_callbacks.connectionTerminated(connect_status);
     } else {
-        stream_session::run_loop(cfg, listener, input_handler);
+        stream_session::run_loop(cfg, listener, input_handler,
+                                 app.input_only ? host->display_name() : "");
     }
 
     LiStopConnection();

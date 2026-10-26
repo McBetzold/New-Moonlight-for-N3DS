@@ -29,6 +29,7 @@
 #include <cstring>
 #include <stdbool.h>
 #include <stdexcept>
+#include <algorithm>
 #include <unistd.h>
 #include <utility>
 
@@ -47,13 +48,34 @@ void N3dsRendererBase::set_stereo_options(STEREO_3D_MODE mode,
     stereo_swap_eyes = swap_eyes;
 }
 
+volatile u64 N3dsRendererBase::last_frame_tick = 0;
+volatile u64 N3dsRendererBase::last_trouble_tick = 0;
+volatile bool N3dsRendererBase::mouse_indicator = false;
+
+void N3dsRendererBase::set_mouse_indicator(bool on) { mouse_indicator = on; }
+
 void N3dsRendererBase::note_frame(int frame_number,
                                   unsigned host_latency_01ms) {
+    u64 now = svcGetSystemTick();
+    // A long silence means this is the first frame of a new stream; start the
+    // bookkeeping over instead of reporting the gap as a stall
+    if (last_frame_tick != 0 && now - last_frame_tick > 5 * SYSCLOCK_ARM11) {
+        last_frame_tick = 0;
+        last_frame_number = -1;
+    }
     // moonlight-common-c numbers frames consecutively and drops the ones it
     // could not repair with FEC, so a gap is a frame lost on the network.
     if (last_frame_number >= 0 && frame_number > last_frame_number + 1) {
         frames_lost += (u32)(frame_number - last_frame_number - 1);
+        last_trouble_tick = now;
     }
+    // Weak Wi-Fi often delays frames (retransmissions) rather than losing
+    // them; a quarter-second gap is a stall worth flagging too. The host
+    // sends a frame at least every ~100 ms even when nothing changes.
+    if (last_frame_tick != 0 && now - last_frame_tick > SYSCLOCK_ARM11 / 4) {
+        last_trouble_tick = now;
+    }
+    last_frame_tick = now;
     last_frame_number = frame_number;
     if (host_latency_01ms > 0) {
         host_latency_sum += host_latency_01ms;
@@ -64,34 +86,88 @@ void N3dsRendererBase::note_frame(int frame_number,
     }
 }
 
-void N3dsRendererBase::draw_connection_marker() {
-    auto listener = N3dsConnectionListener::get_instance();
-    if (listener == nullptr || !listener->connection_is_poor()) {
-        return;
-    }
-    // Yellow square with a dark border in the top-right corner. The
-    // framebuffer is column-major: pixel (x, y) lives at
-    // (x * height + (height - 1 - y)).
-    const int size = 12, margin = 5;
-    const u16 yellow = 0xFFE0, dark = 0x2104;
+// Draws a small bitmap onto the top screen (both eye buffers in 3D) at
+// (x0, y0) in 400x240 screen coordinates. In each row '#' is drawn in
+// `hash`, '.' in `dot` and anything else is left alone. The framebuffer is
+// column-major (pixel (x, y) at x * height + (height - 1 - y)); in wide mode
+// it has 800 columns, so every screen column is two framebuffer columns.
+static void blit_top(const char *const *rows, int row_count, int x0, int y0,
+                     u16 hash, u16 dot) {
     gfx3dSide_t sides[2] = {GFX_LEFT, GFX_RIGHT};
     int side_count = gfxIs3D() ? 2 : 1;
+    int width = 0;
+    for (int r = 0; r < row_count; r++) {
+        width = std::max(width, (int)strlen(rows[r]));
+    }
     for (int s = 0; s < side_count; s++) {
+        // Reports (240, 400 or 800): the column height, then the width
         u16 fb_h = 0, fb_w = 0;
         u16 *fb = (u16 *)gfxGetFramebuffer(GFX_TOP, sides[s], &fb_h, &fb_w);
         if (fb == NULL || fb_h == 0 || fb_w == 0) {
             continue;
         }
-        // gfxGetFramebuffer reports (240, 400 or 800): fb_h is the column
-        // height and fb_w the screen width.
-        int x0 = fb_w - margin - size, y0 = margin;
-        for (int x = x0; x < x0 + size; x++) {
-            for (int y = y0; y < y0 + size; y++) {
-                bool border = x == x0 || x == x0 + size - 1 || y == y0 ||
-                              y == y0 + size - 1;
-                fb[x * fb_h + (fb_h - 1 - y)] = border ? dark : yellow;
+        int xs = fb_w > GSP_SCREEN_HEIGHT_TOP ? 2 : 1;
+        for (int r = 0; r < row_count; r++) {
+            int y = y0 + r;
+            if (y < 0 || y >= fb_h) {
+                continue;
+            }
+            for (int c = 0; rows[r][c]; c++) {
+                char ch = rows[r][c];
+                if (ch != '#' && ch != '.') {
+                    continue;
+                }
+                for (int k = 0; k < xs; k++) {
+                    int x = (x0 + c) * xs + k;
+                    if (x >= 0 && x < fb_w) {
+                        fb[x * fb_h + (fb_h - 1 - y)] = ch == '#' ? hash : dot;
+                    }
+                }
             }
         }
+        // The CPU wrote through its cache; make the pixels visible to the
+        // display before the buffer is presented
+        int first_col = std::max(0, x0 * xs);
+        int last_col = std::min((int)fb_w, (x0 + width) * xs);
+        if (last_col > first_col) {
+            GSPGPU_FlushDataCache(fb + first_col * fb_h,
+                                  (last_col - first_col) * fb_h * sizeof(u16));
+        }
+    }
+}
+
+static const u16 COLOR_YELLOW = 0xFFE0, COLOR_DARK = 0x2104,
+                 COLOR_WHITE = 0xFFFF;
+
+// Yellow warning sign with an exclamation mark
+static const char *const WARNING_ICON[] = {
+    "##############", "#.....##.....#", "#.....##.....#", "#.....##.....#",
+    "#.....##.....#", "#.....##.....#", "#.....##.....#", "#............#",
+    "#.....##.....#", "#.....##.....#", "#............#", "##############",
+};
+
+// Mouse pointer (dark outline, white fill)
+static const char *const POINTER_ICON[] = {
+    "#",          "##",         "#.#",       "#..#",       "#...#",
+    "#....#",     "#.....#",    "#......#",  "#.......#",  "#........#",
+    "#.....#####", "#..#..#",   "#.# #..#",  "##  #..#",   "#    #..#",
+    "      ##",
+};
+
+void N3dsRendererBase::draw_connection_marker() {
+    auto listener = N3dsConnectionListener::get_instance();
+    bool poor = listener != nullptr && listener->connection_is_poor();
+    // Frames lost or stalled within the last three seconds
+    bool recent = last_trouble_tick != 0 &&
+                  svcGetSystemTick() - last_trouble_tick < 3 * SYSCLOCK_ARM11;
+    if (poor || recent) {
+        blit_top(WARNING_ICON, sizeof(WARNING_ICON) / sizeof(WARNING_ICON[0]),
+                 GSP_SCREEN_HEIGHT_TOP - 6 - 14, 5, COLOR_DARK, COLOR_YELLOW);
+    }
+    if (mouse_indicator) {
+        // The C-stick is driving the mouse (hold START to switch back)
+        blit_top(POINTER_ICON, sizeof(POINTER_ICON) / sizeof(POINTER_ICON[0]),
+                 6, 5, COLOR_DARK, COLOR_WHITE);
     }
 }
 
@@ -196,7 +272,9 @@ inline void N3dsRendererBase::log_perf_counters() {
         snprintf(host_str, sizeof(host_str), "avg %5.1f  max %5.1f ms",
                  hl_sum / (double)hl_count / 10.0, hl_max / 10.0);
     } else {
-        snprintf(host_str, sizeof(host_str), "not reported");
+        // The host only times frames it newly captured; on a still screen
+        // it re-sends the last frame without a time
+        snprintf(host_str, sizeof(host_str), "n/a (screen not changing)");
     }
 
     // The RTT is moonlight-common-c's estimate from the ENet control channel,

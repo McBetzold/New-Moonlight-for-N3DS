@@ -20,11 +20,14 @@
 #include "stream_session.hpp"
 
 #include "../input/n3ds_input.hpp"
+#include "../system/apt_state.hpp"
 #include "../system/dispatcher.hpp"
 #include "../system/n3ds_connection.hpp"
 
 #include <3ds.h>
 #include <Limelight.h>
+#include <cstdio>
+#include <string>
 
 namespace stream_session {
 
@@ -49,8 +52,90 @@ static void input_loop(void *input_handler_in) {
     }
 }
 
+// Top-screen panel for input-only sessions, drawn with a text console. It is
+// redrawn every second (the renderers clear the top screen when the touch
+// view changes) and shows a running timer and a blinking light so it is
+// obvious the session is alive.
+class InputOnlyPanel {
+  public:
+    explicit InputOnlyPanel(const std::string &host) : host(host) {
+        started_ms = osGetTime();
+    }
+
+    void update() {
+        u64 now = osGetTime();
+        if (drawn && now - last_draw_ms < 1000) {
+            return;
+        }
+        last_draw_ms = now;
+        // The console needs the plain 400-pixel 2D layout
+        bool mode_changed = false;
+        if (gfxIs3D()) {
+            gfxSet3D(false);
+            mode_changed = true;
+        }
+        if (gfxIsWide()) {
+            gfxSetWide(false);
+            mode_changed = true;
+        }
+        if (mode_changed || !drawn) {
+            consoleInit(GFX_TOP, &console);
+        }
+        PrintConsole *prev = consoleSelect(&console);
+        draw((now - started_ms) / 1000);
+        consoleSelect(prev);
+        gfxFlushBuffers();
+        gfxScreenSwapBuffers(GFX_TOP, false);
+        drawn = true;
+    }
+
+  private:
+    void draw(u64 seconds) {
+        // 50 x 30 characters. CP437 box-drawing characters frame the panel.
+        const int L = 4, W = 42;
+        auto row = [&](int y, const char *color, const std::string &text) {
+            std::string t = text.substr(0, W - 4);
+            printf("\x1b[%d;%dH\x1b[37m\xBA\x1b[0m %s%-*s\x1b[0m \x1b[37m\xBA",
+                   y, L, color, W - 4, t.c_str());
+        };
+        std::string bar(W - 2, '\xCD');
+        printf("\x1b[0m\x1b[6;%dH\x1b[37m\xC9%s\xBB", L, bar.c_str());
+        row(7, "", "");
+        row(8, "\x1b[1;37m", "REMOTE INPUT");
+        row(9, "\x1b[36m", "Connected to " + host);
+        row(10, "", "");
+        char status[48];
+        snprintf(status, sizeof(status), "Session %llu:%02llu",
+                 (unsigned long long)(seconds / 60),
+                 (unsigned long long)(seconds % 60));
+        // Blinking status light next to the timer
+        printf("\x1b[11;%dH\x1b[37m\xBA\x1b[0m %s\xFE\x1b[0m %-*s \x1b[37m\xBA",
+               L, (seconds % 2) ? "\x1b[32m" : "\x1b[1;32m", W - 6, status);
+        row(12, "", "");
+        row(13, "\x1b[37m", "This 3DS is controlling the PC.");
+        row(14, "\x1b[37m", "No picture or sound is streamed.");
+        row(15, "", "");
+        row(16, "\x1b[33m", "Buttons and sticks: game controller");
+        row(17, "\x1b[33m", "HOME: menu (mouse, keyboard, touch)");
+        row(18, "\x1b[33m", "HOME twice: end the session");
+        row(19, "", "");
+        printf("\x1b[20;%dH\x1b[37m\xC8%s\xBC\x1b[0m", L, bar.c_str());
+    }
+
+    std::string host;
+    PrintConsole console;
+    u64 started_ms = 0;
+    u64 last_draw_ms = 0;
+    bool drawn = false;
+};
+
 void run_loop(PCONFIGURATION config, N3dsConnectionListener *listener,
-              std::shared_ptr<N3dsInput> input_handler) {
+              std::shared_ptr<N3dsInput> input_handler,
+              const std::string &input_only_host) {
+    std::unique_ptr<InputOnlyPanel> panel;
+    if (!input_only_host.empty()) {
+        panel.reset(new InputOnlyPanel(input_only_host));
+    }
     // Spin off worker threads. They are joined below: both keep raw pointers
     // to the listener and the input handler, which the caller destroys as
     // soon as this function returns.
@@ -70,6 +155,9 @@ void run_loop(PCONFIGURATION config, N3dsConnectionListener *listener,
         gspWaitForAnyEvent();
         if (aptShouldClose()) {
             listener->connection_terminated(0);
+        }
+        if (panel && !apt_state_suspended()) {
+            panel->update();
         }
     }
 

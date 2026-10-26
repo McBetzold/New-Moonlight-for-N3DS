@@ -22,18 +22,20 @@
 #include <memory>
 #include <vector>
 
-// Five rows of two buttons; must match 3ds/gfx/menu.png
-static const int button_size_y = 48;
-static const int button_size_x = 160;
-
-// Map the Row and Column numbers of each button to their corresponding
-// Touch Type Setting
-static std::map<int, std::map<int, N3dsTouchType>> button_map{
-    {0, {{0, N3dsTouchType::GAMEPAD}, {1, N3dsTouchType::MOUSEPAD}}},
-    {1, {{0, N3dsTouchType::KEYBOARD}, {1, N3dsTouchType::ABSOLUTE_TOUCH}}},
-    {2, {{0, N3dsTouchType::DS_TOUCH}, {1, N3dsTouchType::MAGNIFY_TOUCH}}},
-    {3, {{0, N3dsTouchType::SERVER_CMD_TOUCH}, {1, N3dsTouchType::DEBUG_TOUCH}}},
-    {4, {{0, N3dsTouchType::PASSTHROUGH_TOUCH}, {1, N3dsTouchType::DISABLED}}},
+// Four rows of equal height, grouped by purpose; each row splits the width
+// evenly between its buttons. Must match 3ds/gfx/menu.png.
+//   on-screen controls:          GAMEPAD  KEYBOARD  MOUSE
+//   picture on the touch screen: MIRROR   TOUCH       (clicks vs. real touch)
+//   other views:                 STRETCH  MAGNIFY
+//   tools:                       EXIT     COMMANDS  DEBUG
+static const int button_size_y = 60;
+static const std::vector<std::vector<N3dsTouchType>> button_rows{
+    {N3dsTouchType::GAMEPAD, N3dsTouchType::KEYBOARD,
+     N3dsTouchType::MOUSEPAD},
+    {N3dsTouchType::ABSOLUTE_TOUCH, N3dsTouchType::PASSTHROUGH_TOUCH},
+    {N3dsTouchType::DS_TOUCH, N3dsTouchType::MAGNIFY_TOUCH},
+    {N3dsTouchType::DISABLED, N3dsTouchType::SERVER_CMD_TOUCH,
+     N3dsTouchType::DEBUG_TOUCH},
 };
 
 // HOME stays disallowed while streaming; N3dsInput turns a rejected HOME
@@ -54,10 +56,16 @@ void MenuTouchHandler::_handle_touch_up(touchPosition touch) {
 void MenuTouchHandler::_handle_touch_hold(touchPosition touch) {
     touch.py = touch.py < GSP_SCREEN_WIDTH ? touch.py : (touch.py - 1);
     touch.px = touch.px < GSP_SCREEN_HEIGHT_BOTTOM ? touch.px : (touch.px - 1);
-    int round_y = touch.py / button_size_y;
-    int round_x = touch.px / button_size_x;
+    int row = touch.py / button_size_y;
+    if (row < 0 || row >= (int)button_rows.size()) {
+        message = nullptr;
+        return;
+    }
+    const auto &buttons = button_rows[row];
+    int col = touch.px * (int)buttons.size() / GSP_SCREEN_HEIGHT_BOTTOM;
+    col = col < 0 ? 0 : col >= (int)buttons.size() ? buttons.size() - 1 : col;
 
-    N3dsTouchType touch_type = button_map[round_y][round_x];
+    N3dsTouchType touch_type = buttons[col];
     switch (touch_type) {
     case (N3dsTouchType::GAMEPAD):
         message = std::make_shared<TouchStateChangedMsg>(touch_type);

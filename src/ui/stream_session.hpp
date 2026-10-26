@@ -19,6 +19,7 @@
 #include "../config.hpp"
 
 #include <memory>
+#include <string>
 
 class N3dsInput;
 class N3dsConnectionListener;
@@ -27,7 +28,11 @@ namespace stream_session {
 
 // Spawns the input and message-dispatch threads for an established
 // connection and blocks until it closes or the system asks the app to exit.
+// A non-empty input_only_host marks an input-only session (Apollo's Remote
+// Input): no video arrives, so a status panel naming that host is kept on
+// the top screen.
 void run_loop(PCONFIGURATION config, N3dsConnectionListener *listener,
-              std::shared_ptr<N3dsInput> input_handler);
+              std::shared_ptr<N3dsInput> input_handler,
+              const std::string &input_only_host = "");
 
 } // namespace stream_session
