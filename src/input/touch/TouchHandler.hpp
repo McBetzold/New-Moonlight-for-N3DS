@@ -31,6 +31,11 @@ typedef struct _GAMEPAD_STATE {
     short rightStickX = 0;
     short rightStickY = 0;
     int buttons = 0;
+    // What the bottom-screen gamepad view is currently pressing; merged into
+    // buttons/triggers by N3dsInput every frame
+    int touch_buttons = 0;
+    unsigned char touch_left_trigger = 0;
+    unsigned char touch_right_trigger = 0;
     float accel_vector_x = 0;
     float accel_vector_y = 0;
     float accel_vector_z = 0;
@@ -109,12 +114,14 @@ class MenuTouchHandler : public TouchHandlerBase {
 class GamepadTouchHandler : public TouchHandlerBase {
   public:
     GamepadTouchHandler(GAMEPAD_STATE *gamepad_in);
-    ~GamepadTouchHandler() = default;
+    ~GamepadTouchHandler();
 
   private:
     void _handle_touch_down(touchPosition touch) override;
     void _handle_touch_up(touchPosition touch) override;
     void _handle_touch_hold(touchPosition touch) override;
+    void press_zone_at(touchPosition touch);
+    void release();
 
   private:
     GAMEPAD_STATE *gamepad_state;

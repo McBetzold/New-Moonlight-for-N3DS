@@ -44,6 +44,55 @@ enum STEREO_3D_MODE {
     STEREO_3D_MODE_COUNT
 };
 
+// What a 3DS button (or a zone of the bottom-screen gamepad view) sends to
+// the PC's virtual controller. See src/input/button_mapping.hpp.
+enum PAD_TARGET {
+    PAD_NONE = 0,
+    PAD_A,
+    PAD_B,
+    PAD_X,
+    PAD_Y,
+    PAD_LB,
+    PAD_RB,
+    PAD_LT,
+    PAD_RT,
+    PAD_VIEW,  // Back / Select
+    PAD_MENU,  // Start
+    PAD_GUIDE, // Xbox / Home button
+    PAD_L3,
+    PAD_R3,
+    PAD_L3R3, // both stick clicks at once
+    PAD_UP,
+    PAD_DOWN,
+    PAD_LEFT,
+    PAD_RIGHT,
+    PAD_TARGET_COUNT
+};
+
+// The 3DS buttons that can be remapped (the D-pad and sticks are fixed)
+enum PAD_SOURCE {
+    SRC_A = 0,
+    SRC_B,
+    SRC_X,
+    SRC_Y,
+    SRC_L,
+    SRC_R,
+    SRC_ZL,
+    SRC_ZR,
+    SRC_START,
+    SRC_SELECT,
+    PAD_SOURCE_COUNT
+};
+
+// Touch zones of the bottom-screen gamepad view
+enum TOUCH_ZONE {
+    ZONE_TOP_LEFT = 0,
+    ZONE_TOP_MIDDLE,
+    ZONE_TOP_RIGHT,
+    ZONE_BOTTOM,
+    TOUCH_ZONE_COUNT
+};
+
 typedef struct _CONFIGURATION {
     STREAM_CONFIGURATION stream;
     char *app;
@@ -85,6 +134,12 @@ typedef struct _CONFIGURATION {
     bool resume_on_start;
     // Holding START turns the C-stick into a mouse (ZL/ZR click).
     bool cstick_mouse;
+    // PAD_TARGET for each PAD_SOURCE and each TOUCH_ZONE
+    unsigned char button_map[PAD_SOURCE_COUNT];
+    unsigned char touch_map[TOUCH_ZONE_COUNT];
+    // Set while parsing when moonlight.conf has a button_map line; otherwise
+    // the old swap options are converted into a mapping
+    bool button_map_from_file;
 } CONFIGURATION, *PCONFIGURATION;
 
 const char *stereo_3d_mode_name(STEREO_3D_MODE mode);

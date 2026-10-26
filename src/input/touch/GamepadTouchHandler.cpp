@@ -17,39 +17,52 @@
  * along with Moonlight; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "../button_mapping.hpp"
 #include "TouchHandler.hpp"
 #include <Limelight.h>
 #include <cstring>
 
+// Four zones, matching the boxes drawn by ButtonMapping::gamepad_view_image():
+// three across the top half and one filling the bottom half. Each sends
+// whatever the touch mapping assigns to it (default L3, L3+R3, R3, Guide).
+
 GamepadTouchHandler::GamepadTouchHandler(GAMEPAD_STATE *gamepad_in)
     : gamepad_state(gamepad_in) {}
 
-void GamepadTouchHandler::_handle_touch_down(touchPosition touch) {
+GamepadTouchHandler::~GamepadTouchHandler() { release(); }
+
+void GamepadTouchHandler::release() {
+    gamepad_state->touch_buttons = 0;
+    gamepad_state->touch_left_trigger = 0;
+    gamepad_state->touch_right_trigger = 0;
+}
+
+void GamepadTouchHandler::press_zone_at(touchPosition touch) {
+    int zone;
     if (touch.py >= 120) {
-        gamepad_state->buttons |= SPECIAL_FLAG;
-        return;
+        zone = ZONE_BOTTOM;
+    } else if (touch.px < 104) {
+        zone = ZONE_TOP_LEFT;
+    } else if (touch.px < 215) {
+        zone = ZONE_TOP_MIDDLE;
+    } else {
+        zone = ZONE_TOP_RIGHT;
     }
-
-    if (touch.px < 235)
-        gamepad_state->buttons |= LS_CLK_FLAG;
-    if (touch.px > 104)
-        gamepad_state->buttons |= RS_CLK_FLAG;
+    int buttons = 0;
+    uint8_t lt = 0, rt = 0;
+    ButtonMapping::apply_target(ButtonMapping::active_touch_target(zone),
+                                buttons, lt, rt);
+    gamepad_state->touch_buttons = buttons;
+    gamepad_state->touch_left_trigger = lt;
+    gamepad_state->touch_right_trigger = rt;
 }
 
-void GamepadTouchHandler::_handle_touch_up(touchPosition touch) {
-    gamepad_state->buttons &= ~(SPECIAL_FLAG | LS_CLK_FLAG | RS_CLK_FLAG);
+void GamepadTouchHandler::_handle_touch_down(touchPosition touch) {
+    press_zone_at(touch);
 }
+
+void GamepadTouchHandler::_handle_touch_up(touchPosition touch) { release(); }
 
 void GamepadTouchHandler::_handle_touch_hold(touchPosition touch) {
-    gamepad_state->buttons &= ~(SPECIAL_FLAG | LS_CLK_FLAG | RS_CLK_FLAG);
-
-    if (touch.py >= 120) {
-        gamepad_state->buttons |= SPECIAL_FLAG;
-        return;
-    }
-
-    if (touch.px < 235)
-        gamepad_state->buttons |= LS_CLK_FLAG;
-    if (touch.px > 104)
-        gamepad_state->buttons |= RS_CLK_FLAG;
+    press_zone_at(touch);
 }

@@ -21,6 +21,7 @@
 
 #include "moonlight_ui.hpp"
 
+#include "../input/button_mapping.hpp"
 #include "../system/pair_record.hpp"
 
 #include <algorithm>
@@ -430,23 +431,110 @@ void MoonlightUi::settings_build() {
            "Sends the 3DS gyroscope and accelerometer to games that request "
            "motion input.",
            &cfg->motion_controls);
-    toggle("Swap A/B and X/Y",
-           "Matches the Xbox controller layout so the button positions line up "
-           "with on-screen prompts.",
-           &cfg->swap_face_buttons);
-    toggle("Swap L/R with ZL/ZR",
-           "Sends the shoulder buttons as triggers and the triggers as "
-           "shoulder buttons.",
-           &cfg->swap_triggers_and_shoulders);
-    toggle("ZL/ZR as mouse buttons",
-           "Uses the triggers as left and right mouse clicks, which pairs well "
-           "with the touchpad view.",
+    toggle("Triggers as mouse buttons",
+           "Whatever is mapped to LT and RT (ZL and ZR by default) clicks the "
+           "left and right mouse buttons instead, which pairs well with the "
+           "touchpad view.",
            &cfg->use_triggers_for_mouse);
     toggle("Hold START for mouse",
            "Holding START for a second switches the C-stick to moving the "
-           "mouse, with ZL and ZR as its buttons. Hold START again to go "
-           "back.",
+           "mouse, with the LT and RT buttons as its clicks. Hold START again "
+           "to go back.",
            &cfg->cstick_mouse);
+
+    // ---- what each button sends
+    header("Button Mapping");
+    {
+        SettingRow r;
+        r.type = SettingRow::Choice;
+        r.label = "Layout";
+        r.desc = ButtonMapping::preset_desc(0);
+        r.desc_fn = [cfg] {
+            return std::string(
+                ButtonMapping::preset_desc(ButtonMapping::matching_preset(cfg)));
+        };
+        r.value = [cfg] {
+            return std::string(
+                ButtonMapping::preset_label(ButtonMapping::matching_preset(cfg)));
+        };
+        r.adjust = [cfg](int dir) {
+            int p = ButtonMapping::matching_preset(cfg);
+            if (p < 0) {
+                p = dir > 0 ? 0 : ButtonMapping::PRESET_COUNT - 1;
+            } else {
+                p = (p + dir + ButtonMapping::PRESET_COUNT) %
+                    ButtonMapping::PRESET_COUNT;
+            }
+            ButtonMapping::apply_preset(cfg, p);
+        };
+        r.activate = [cfg] {
+            int p = ButtonMapping::matching_preset(cfg);
+            ButtonMapping::apply_preset(
+                cfg, p < 0 ? 0 : (p + 1) % ButtonMapping::PRESET_COUNT);
+        };
+        rows_.push_back(r);
+    }
+    // One row per remappable button or gamepad-view zone, cycling through
+    // every controller input
+    auto target_row = [&](const char *label, unsigned char *slot,
+                          const char *what) {
+        SettingRow r;
+        r.type = SettingRow::Choice;
+        r.label = label;
+        r.desc = what;
+        std::string what_s = what;
+        r.desc_fn = [slot, what_s] {
+            return what_s + " Sends: " +
+                   ButtonMapping::target_label(*slot) +
+                   ". Left/right to change.";
+        };
+        r.value = [slot] {
+            return std::string(ButtonMapping::target_label(*slot));
+        };
+        r.adjust = [slot](int dir) {
+            *slot = (unsigned char)((*slot + dir + PAD_TARGET_COUNT) %
+                                    PAD_TARGET_COUNT);
+        };
+        r.activate = [slot] {
+            *slot = (unsigned char)((*slot + 1) % PAD_TARGET_COUNT);
+        };
+        rows_.push_back(r);
+    };
+    for (int s = 0; s < PAD_SOURCE_COUNT; s++) {
+        target_row(ButtonMapping::source_label(s), &cfg->button_map[s],
+                   "What this 3DS button sends to the PC's controller.");
+    }
+
+    header("Gamepad View");
+    static const char *zone_desc[TOUCH_ZONE_COUNT] = {
+        "The left box across the top of the gamepad view on the touch "
+        "screen.",
+        "The middle box across the top of the gamepad view.",
+        "The right box across the top of the gamepad view.",
+        "The wide box across the bottom half of the gamepad view."};
+    static const char *zone_names[TOUCH_ZONE_COUNT] = {
+        "Top left box", "Top middle box", "Top right box", "Bottom box"};
+    for (int z = 0; z < TOUCH_ZONE_COUNT; z++) {
+        target_row(zone_names[z], &cfg->touch_map[z], zone_desc[z]);
+    }
+    {
+        SettingRow r;
+        r.type = SettingRow::Link;
+        r.label = "Reset all mapping";
+        r.desc = "Puts every button and all four gamepad-view boxes back to "
+                 "the defaults: A sends A, L sends LB, ZL sends LT, and the "
+                 "boxes send L3, L3 + R3, R3 and Guide.";
+        r.activate = [this, cfg] {
+            if (confirm("Reset button mapping?",
+                        "Every button and gamepad-view box goes back to its "
+                        "default.",
+                        "Reset", "Cancel")) {
+                ButtonMapping::set_defaults(cfg);
+                toast("Button mapping reset");
+            }
+        };
+        rows_.push_back(r);
+    }
 
     header("Advanced Settings");
     {
