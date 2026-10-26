@@ -91,6 +91,7 @@ void N3dsTouchscreenInput::n3dsinput_handle_touch(u32 kDown, u32 kUp) {
     if (handler == nullptr) {
         return;
     }
+    handler->tick();
 
     touchPosition touch;
     hidTouchRead(&touch);

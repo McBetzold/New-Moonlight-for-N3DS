@@ -77,6 +77,19 @@ void MoonlightUi::launch_app(int index) {
     AppEntry app = apps_[index]; // copy: apps_ may be rebuilt afterwards
     app.art = boxart::Texture(); // the copy must not own the texture
 
+    // Apollo refuses the launch outright without this permission; explain it
+    // instead of showing its bare "Permission denied". Checked before the
+    // quit prompt so a running game is never closed for nothing.
+    if (host->server_valid && host->server.isApollo &&
+        !(host->server.permission & APOLLO_PERM_LAUNCH)) {
+        show_error("Not allowed to launch apps",
+                   "Apollo gives new clients view-only access. On the PIN "
+                   "tab of Apollo's web UI, find \"New 3DS\" and enable "
+                   "Launch Apps, plus the controller, mouse and keyboard "
+                   "input permissions you want.");
+        return;
+    }
+
     // Apollo's Remote Input runs alongside the running app, so it never
     // needs that app to quit first
     if (host->current_game != 0 && host->current_game != app.id &&
@@ -91,18 +104,6 @@ void MoonlightUi::launch_app(int index) {
         if (!quit_running_app(host)) {
             return;
         }
-    }
-
-    // Apollo refuses the launch outright without this permission; explain it
-    // instead of showing its bare "Permission denied".
-    if (host->server_valid && host->server.isApollo &&
-        !(host->server.permission & APOLLO_PERM_LAUNCH)) {
-        show_error("Not allowed to launch apps",
-                   "Apollo gives new clients view-only access. On the PIN "
-                   "tab of Apollo's web UI, find \"New 3DS\" and enable "
-                   "Launch Apps, plus the controller, mouse and keyboard "
-                   "input permissions you want.");
-        return;
     }
 
     config_->stream.supportedVideoFormats = VIDEO_FORMAT_H264;
@@ -200,7 +201,9 @@ void MoonlightUi::launch_app(int index) {
         }
     }
 
-    if (connected_once && cfg->quitappafter) {
+    // Remote Input runs alongside the real app; quitting would close the game
+    // the user was controlling
+    if (connected_once && cfg->quitappafter && !app.input_only) {
         quit_running_app(host);
     }
     after_stream(host);

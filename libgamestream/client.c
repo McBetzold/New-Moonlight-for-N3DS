@@ -272,7 +272,11 @@ static int load_serverinfo(PSERVER_DATA server, bool https) {
   {
     char *hostnameText = NULL;
     if (xml_search(data->memory, data->size, "hostname", &hostnameText) == GS_OK)
+    {
+      // serverinfo is read over HTTP and then HTTPS; keep only the last copy
+      free(server->hostname);
       server->hostname = hostnameText;
+    }
   }
 
   // Optional: the host's MAC address, for Wake-on-LAN (a placeholder of all

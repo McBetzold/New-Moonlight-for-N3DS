@@ -20,6 +20,7 @@
 #include "stream_session.hpp"
 
 #include "../input/n3ds_input.hpp"
+#include "../input/touch/TouchHandler.hpp"
 #include "../system/apt_state.hpp"
 #include "../system/dispatcher.hpp"
 #include "../system/n3ds_connection.hpp"
@@ -81,9 +82,11 @@ class InputOnlyPanel {
         if (mode_changed || !drawn) {
             consoleInit(GFX_TOP, &console);
         }
-        PrintConsole *prev = consoleSelect(&console);
+        consoleSelect(&console);
         draw((now - started_ms) / 1000);
-        consoleSelect(prev);
+        // consoleInit makes the new console current, so restore the app's
+        // usual top console explicitly rather than "whatever was before"
+        consoleSelect(&DebugTouchHandler::topScreen);
         gfxFlushBuffers();
         gfxScreenSwapBuffers(GFX_TOP, false);
         drawn = true;

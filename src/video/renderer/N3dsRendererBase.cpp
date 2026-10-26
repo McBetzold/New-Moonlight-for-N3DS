@@ -54,6 +54,14 @@ volatile bool N3dsRendererBase::mouse_indicator = false;
 
 void N3dsRendererBase::set_mouse_indicator(bool on) { mouse_indicator = on; }
 
+void N3dsRendererBase::reset_frame_stats() {
+    last_frame_number = -1;
+    last_frame_tick = 0;
+    last_trouble_tick = 0;
+    frames_lost = 0;
+    host_latency_sum = host_latency_max = host_latency_count = 0;
+}
+
 void N3dsRendererBase::note_frame(int frame_number,
                                   unsigned host_latency_01ms) {
     u64 now = svcGetSystemTick();
@@ -266,8 +274,9 @@ inline void N3dsRendererBase::log_perf_counters() {
     uint32_t rtt_ms = 0, rtt_var_ms = 0;
     char rtt_str[24];
     if (LiGetEstimatedRttInfo(&rtt_ms, &rtt_var_ms)) {
-        snprintf(rtt_str, sizeof(rtt_str), "%lu ms (var %lu)",
-                 (unsigned long)rtt_ms, (unsigned long)rtt_var_ms);
+        // Kept short: the panel is 39 columns wide
+        snprintf(rtt_str, sizeof(rtt_str), "%lums", (unsigned long)rtt_ms);
+        (void)rtt_var_ms;
     } else {
         snprintf(rtt_str, sizeof(rtt_str), "n/a");
     }
@@ -294,7 +303,7 @@ inline void N3dsRendererBase::log_perf_counters() {
     // "lost" counts frames the network dropped beyond FEC repair; the 3DS
     // never drops a frame it received.
     DebugConsole::set_stats(
-        "%.0f fps  %dx%d  lost %lu  rtt %s\n"
+        "%.0f fps %dx%d lost %lu rtt %s\n"
         "decode  avg %5.1f  max %5.1f ms\n"
         "present avg %5.1f  max %5.1f ms\n"
         "host    %s",

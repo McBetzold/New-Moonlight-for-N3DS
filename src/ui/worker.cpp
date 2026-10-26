@@ -80,9 +80,10 @@ void Worker::run() {
 }
 
 std::shared_ptr<Worker::Job> Worker::post(std::function<void()> fn,
-                                          bool background) {
+                                          bool background, bool droppable) {
     auto job = std::make_shared<Job>();
     job->fn = std::move(fn);
+    job->droppable = droppable;
     LightLock_Lock(&lock_);
     if (background) {
         low_.push_back(job);
@@ -96,7 +97,16 @@ std::shared_ptr<Worker::Job> Worker::post(std::function<void()> fn,
 
 void Worker::drop_background() {
     LightLock_Lock(&lock_);
-    low_.clear();
+    std::deque<std::shared_ptr<Job>> kept;
+    for (auto &job : low_) {
+        if (job->droppable) {
+            job->cancelled.store(true);
+            job->done.store(true);
+        } else {
+            kept.push_back(job);
+        }
+    }
+    low_.swap(kept);
     LightLock_Unlock(&lock_);
 }
 

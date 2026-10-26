@@ -19,13 +19,13 @@ After modding your 3DS and installing the Moonlight CIA, open the Moonlight appl
     - Mac: Click the Apple icon > System Settings (or Preferences) > Network. Select your Wi-Fi or Ethernet connection to see the IP address.
 - The PC appears as a card. A warning badge means it is offline, a lock means it is online but not paired yet, and a play badge means an app is currently running on it.
 - Select the card and press `A` (or tap it a second time). Moonlight offers to pair and shows a four-digit PIN on the top screen; enter it on the PIN page of Sunshine's web UI. The dialog closes by itself once pairing completes.
-- Press `X` (or tap `Options`) on a PC for Pair/Unpair, Rename, Refresh status and Delete. `Y` refreshes the online status of every PC.
+- Press `X` (or tap `Options`) on a PC for Connect, Resume running app, Pair/Unpair (plus *Pair with one-time PIN* on Apollo), Rename, Refresh status, Delete, *Wake PC (experimental)* and the *Wake-on-LAN setup guide*. `Y` refreshes the online status of every PC. A name set with Rename is kept; renaming to an empty name goes back to the PC's own name.
 
 ### Streaming
 
 - Connecting to a paired PC shows its apps with their box art. The art is downloaded from the host the first time and cached under `sd:/3ds/moonlight/boxart`.
 - Move with the D-pad or Circle Pad, or tap a tile. Press `A` (or tap the highlighted tile) to launch the app; if it is already running the stream resumes instead. A green badge marks the running app, and `X` (or `Quit app`) closes it on the PC.
-- While the stream starts, the top screen shows the connection stages (RTSP handshake, control stream, video stream...). Once video arrives, the bottom screen shows the in-stream menu offering view/control options. Touch any of these buttons to select a streaming view.
+- While the stream starts, a dialog shows the connection stages (RTSP handshake, control stream, video stream...). Once video arrives, the bottom screen shows the in-stream menu offering view/control options. Touch any of these buttons to select a streaming view.
 - NOTE: You can re-open the streaming menu any time during the stream by pressing the 3DS's HOME button.
     - Pressing the HOME button again from the menu ends the stream (the app keeps running on the PC) and returns you to the 3DS HOME Menu, like the Android app does when it is sent to the background. Reopen Moonlight and press A on the app to resume.
 - NOTE: The Stretch view shows the upper half of the stream on the top screen and the lower half on the bottom screen at the same scale; because the bottom screen is narrower, it shows the central 80% of the lower half rather than squeezing it. Use the 800x480 preset for it.
@@ -34,7 +34,7 @@ After modding your 3DS and installing the Moonlight CIA, open the Moonlight appl
 - The in-stream menu is grouped by purpose. Top row: on-screen controls (`GAMEPAD`, `KEYBOARD`, `MOUSE` touchpad). Second row: the stream on the touch screen, with taps sent as mouse clicks (`MIRROR`) or as real touch (`TOUCH`). Third row: the other views (`STRETCH`, `MAGNIFY`). Bottom row: `EXIT`, `COMMANDS` and `DEBUG`.
 - NOTE: The Touch view is the Mirror view with real touch input: Sunshine and Apollo receive the stylus as a touch screen, so Windows shows touch feedback and apps that distinguish touch from mouse behave accordingly. On hosts without touch support it falls back to mouse clicks.
 - NOTE: The Commands view lists the server commands of an Apollo host (see *Apollo hosts* below).
-- Holding `START` for about a second turns the C-stick into a mouse pointer with `ZL`/`ZR` as its buttons; a pointer icon appears in the top-left corner of the top screen while it is on. Hold `START` again to get the right stick back. This can be turned off under Input Settings (*C-stick mouse (hold START)*).
+- Holding `START` for about a second turns the C-stick into a mouse pointer, with whatever is mapped to LT/RT (`ZL`/`ZR` by default) as its buttons; a pointer icon appears in the top-left corner of the top screen while it is on. Hold `START` again to get the right stick back. This can be turned off under Input Settings (*C-stick mouse (hold START)*).
 - **Auto-sprint (L3)** (Input Settings, off by default) holds L3 while the Circle Pad is pushed nearly all the way, so shooters sprint without a stick click, which the Circle Pad does not have. Easing off below about 70% releases it, so partial pushes still walk.
 - A yellow warning sign in the top-right corner of the top screen means frames are being lost or delayed on the network; move closer to the router before the stream drops. If it drops anyway, Moonlight reconnects by itself up to three times (Host Settings, *Reconnect automatically*).
 

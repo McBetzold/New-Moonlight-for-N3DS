@@ -46,6 +46,7 @@ struct HostEntry {
     uint16_t port = 47989;
     std::string name;
     std::string mac; // for Wake-on-LAN, learned from the host while paired
+    bool custom_name = false; // renamed by the user; keep the host's own out
 
     bool status_known = false;
     bool online = false;

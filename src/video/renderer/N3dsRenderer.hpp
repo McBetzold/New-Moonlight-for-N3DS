@@ -74,6 +74,8 @@ class N3dsRendererBase {
     // Shows a mouse-pointer icon in the top screen's corner while the
     // C-stick is acting as a mouse (set from the input thread)
     static void set_mouse_indicator(bool on);
+    // Forgets frame numbers, losses and stalls from a previous stream
+    static void reset_frame_stats();
 
   protected:
     inline void log_perf_counters();
