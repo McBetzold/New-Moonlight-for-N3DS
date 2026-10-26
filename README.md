@@ -34,7 +34,8 @@ After modding your 3DS and installing the Moonlight CIA, open the Moonlight appl
 - The in-stream menu is grouped by purpose. Top row: on-screen controls (`GAMEPAD`, `KEYBOARD`, `MOUSE` touchpad). Second row: the stream on the touch screen, with taps sent as mouse clicks (`MIRROR`) or as real touch (`TOUCH`). Third row: the other views (`STRETCH`, `MAGNIFY`). Bottom row: `EXIT`, `COMMANDS` and `DEBUG`.
 - NOTE: The Touch view is the Mirror view with real touch input: Sunshine and Apollo receive the stylus as a touch screen, so Windows shows touch feedback and apps that distinguish touch from mouse behave accordingly. On hosts without touch support it falls back to mouse clicks.
 - NOTE: The Commands view lists the server commands of an Apollo host (see *Apollo hosts* below).
-- Holding `START` for about a second turns the C-stick into a mouse pointer with `ZL`/`ZR` as its buttons; a pointer icon appears in the top-left corner of the top screen while it is on. Hold `START` again to get the right stick back. This can be turned off under Input Settings.
+- Holding `START` for about a second turns the C-stick into a mouse pointer with `ZL`/`ZR` as its buttons; a pointer icon appears in the top-left corner of the top screen while it is on. Hold `START` again to get the right stick back. This can be turned off under Input Settings (*C-stick mouse (hold START)*).
+- **Auto-sprint (L3)** (Input Settings, off by default) holds L3 while the Circle Pad is pushed nearly all the way, so shooters sprint without a stick click, which the Circle Pad does not have. Easing off below about 70% releases it, so partial pushes still walk.
 - A yellow warning sign in the top-right corner of the top screen means frames are being lost or delayed on the network; move closer to the router before the stream drops. If it drops anyway, Moonlight reconnects by itself up to three times (Host Settings, *Reconnect automatically*).
 
 ### Waking and resuming

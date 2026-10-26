@@ -134,6 +134,8 @@ typedef struct _CONFIGURATION {
     bool resume_on_start;
     // Holding START turns the C-stick into a mouse (ZL/ZR click).
     bool cstick_mouse;
+    // Hold L3 while the Circle Pad is pushed almost fully (sprint in FPS games)
+    bool auto_sprint;
     // PAD_TARGET for each PAD_SOURCE and each TOUCH_ZONE
     unsigned char button_map[PAD_SOURCE_COUNT];
     unsigned char touch_map[TOUCH_ZONE_COUNT];
