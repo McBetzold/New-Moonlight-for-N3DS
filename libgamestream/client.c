@@ -993,6 +993,7 @@ int gs_init(PSERVER_DATA server, char *address, unsigned short httpPort, const c
 void gs_cleanup() {
   if (cert != NULL)
     X509_free(cert);
+  cert = NULL; // gs_cleanup runs before every probe; never free twice
   if (privateKey != NULL)
   {
     EVP_PKEY_free(privateKey);

@@ -129,7 +129,7 @@ void ServerCmdTouchHandler::_handle_touch_up(touchPosition touch) {
             snprintf(status, sizeof(status), "Sent: %.30s",
                      names[row].c_str());
         } else {
-            snprintf(status, sizeof(status), "Could not send %.26s",
+            snprintf(status, sizeof(status), "Could not send %.23s",
                      names[row].c_str());
         }
     }

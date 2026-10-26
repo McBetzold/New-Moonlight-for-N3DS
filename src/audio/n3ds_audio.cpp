@@ -77,16 +77,24 @@ static int n3ds_renderer_init(int audioConfiguration,
     samplesPerFrame = opusConfig->samplesPerFrame;
     int bytes_per_frame = sizeof(short) * channelCount * samplesPerFrame;
 
+    // moonlight-common-c does not call cleanup when init fails, so undo
+    // whatever was already set up on each failure path
     if (ndspInit() != 0) {
         fprintf(stderr, "ndspInit() failed\n");
+        opus_multistream_decoder_destroy(decoder);
+        decoder = NULL;
         return -1;
     }
 
     // Assign the file-scope buffer (a local here would shadow it and leak
     // the linear allocation on every stream)
     audioBuffer = (u8 *)linearAlloc(bytes_per_frame * WAVEBUF_SIZE);
-    if (audioBuffer == NULL)
+    if (audioBuffer == NULL) {
+        ndspExit();
+        opus_multistream_decoder_destroy(decoder);
+        decoder = NULL;
         return -1;
+    }
     memset(audioBuffer, 0, bytes_per_frame * WAVEBUF_SIZE);
 
     ndspChnWaveBufClear(0);

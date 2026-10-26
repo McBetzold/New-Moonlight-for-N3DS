@@ -284,8 +284,10 @@ void MoonlightUi::settings_build() {
         };
         r.activate = [this, cfg] {
             int kbps = cfg->stream.bitrate;
-            if (prompt_number("Bitrate in kbps", kbps, kbps)) {
-                cfg->stream.bitrate = std::max(100, std::min(50000, kbps));
+            if (prompt_number("Bitrate in kbps (500 to 20000)", kbps, kbps)) {
+                // Same range as the slider and left/right
+                cfg->stream.bitrate =
+                    std::max(BITRATE_MIN, std::min(BITRATE_MAX, kbps));
             }
         };
         rows_.push_back(r);

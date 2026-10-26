@@ -209,6 +209,9 @@ void N3dsInput::n3dsinput_handle_event() {
             }
             menu_active = true;
         }
+        // Nothing is sent this frame; forget the state read above so a press
+        // or release that happened now is still sent on the next frame
+        gamepad_state = previous_state;
         return;
     } else {
         menu_active = false;
