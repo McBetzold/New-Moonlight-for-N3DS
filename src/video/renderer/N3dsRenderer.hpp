@@ -79,7 +79,7 @@ class N3dsRendererBase {
     inline void log_perf_counters();
     // Small warning block in the top screen's corner while moonlight-common-c
     // reports a poor connection
-    void draw_connection_marker();
+    void draw_connection_marker(uint8_t *source, bool side_by_side);
     void write_px_to_framebuffer_gpu(
         uint8_t *__restrict source,
         const N3dsStereoView &stereo = N3dsStereoView());
