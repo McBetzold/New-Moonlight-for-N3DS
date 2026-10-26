@@ -31,6 +31,7 @@ struct Record {
     uint16_t port = 47989;
     std::string name; // hostname reported by the server, may be empty
     std::string mac;  // for Wake-on-LAN, learned while paired; may be empty
+    bool custom_name = false; // set by Rename; keeps the host's own name out
 };
 
 std::vector<Record> load();

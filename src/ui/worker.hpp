@@ -35,14 +35,22 @@ class Worker {
     struct Job {
         std::function<void()> fn;
         AtomicVar<bool> done{false};
+        // Set when drop_background() discarded the job before it ran; done
+        // is set too, so anything waiting on it wakes up
+        AtomicVar<bool> cancelled{false};
+        bool droppable = false;
         bool is_done() { return done.load(); }
     };
 
     static Worker &instance();
 
+    // droppable: may be discarded by drop_background() (box art). Status
+    // checks and app-list loads must not be, or whoever waits on them would
+    // wait forever.
     std::shared_ptr<Job> post(std::function<void()> fn,
-                              bool background = false);
-    // Discards queued (not yet running) background jobs.
+                              bool background = false, bool droppable = false);
+    // Discards queued (not yet running) droppable background jobs and marks
+    // them done + cancelled.
     void drop_background();
     // True while a job is running or queued.
     bool busy();

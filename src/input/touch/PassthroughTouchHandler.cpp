@@ -52,6 +52,7 @@ bool PassthroughTouchHandler::send(uint8_t event_type, touchPosition touch) {
 
 void PassthroughTouchHandler::_handle_touch_down(touchPosition touch) {
     touching = true;
+    last_touch = touch;
     if (supported && send(LI_TOUCH_EVENT_DOWN, touch)) {
         return;
     }
@@ -64,6 +65,7 @@ void PassthroughTouchHandler::_handle_touch_hold(touchPosition touch) {
     if (!touching) {
         return;
     }
+    last_touch = touch;
     if (supported && send(LI_TOUCH_EVENT_MOVE, touch)) {
         return;
     }
@@ -76,7 +78,9 @@ void PassthroughTouchHandler::_handle_touch_up(touchPosition touch) {
         return;
     }
     touching = false;
-    if (supported && send(LI_TOUCH_EVENT_UP, touch)) {
+    // On the lift frame the touch screen reads (0, 0); lift where the stylus
+    // last was so the contact does not jump to the corner
+    if (supported && send(LI_TOUCH_EVENT_UP, last_touch)) {
         return;
     }
     LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);

@@ -50,6 +50,8 @@ class TouchHandlerBase {
     void handle_touch_down(touchPosition touch);
     void handle_touch_up(touchPosition touch);
     void handle_touch_hold(touchPosition touch);
+    // Called once per input frame whether or not the screen is touched
+    virtual void tick() {}
 
   private:
     virtual void _handle_touch_down(touchPosition touch) = 0;
@@ -81,6 +83,7 @@ class ServerCmdTouchHandler : public TouchHandlerBase {
   public:
     ServerCmdTouchHandler();
     ~ServerCmdTouchHandler();
+    void tick() override;
 
   private:
     void _handle_touch_down(touchPosition touch) override;
@@ -201,6 +204,7 @@ class PassthroughTouchHandler : public TouchHandlerBase {
   private:
     bool supported = true;
     bool touching = false;
+    touchPosition last_touch = {0, 0};
 };
 
 class MirrorTouchHandler : public TouchHandlerBase {

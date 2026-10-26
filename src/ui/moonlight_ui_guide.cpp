@@ -39,7 +39,8 @@ static const GuidePage STEREO_GUIDE[] = {
      "PC."},
     {"Set up the 3DS",
      "* In Settings, set 3D mode to Side-by-side.\n"
-     "* Resolution: 800x480 (PC games) for games, so they render in HD, or "
+     "* Resolution: 800x480 (PC games, experimental) for games, so they render "
+     "in HD, or "
      "800x480 (Desktop) for videos and the desktop.\n"
      "* Start the stream, then raise the 3D slider. Lowering it all the way "
      "returns to 2D.\n"

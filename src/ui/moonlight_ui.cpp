@@ -121,6 +121,7 @@ MoonlightUi::MoonlightUi(PCONFIGURATION config) : config_(config) {
         h->address = rec.address;
         h->port = rec.port;
         h->name = rec.name;
+        h->custom_name = rec.custom_name;
         h->mac = rec.mac;
         hosts_.push_back(h);
     }
@@ -179,7 +180,13 @@ bool MoonlightUi::poll() {
 void MoonlightUi::pump() {
     for (auto it = probes_.begin(); it != probes_.end();) {
         if (it->job->is_done()) {
-            apply_probe(*it);
+            // Skip results for a PC that was deleted while it was checked
+            if (std::find(hosts_.begin(), hosts_.end(), it->host) !=
+                hosts_.end()) {
+                apply_probe(*it);
+            } else {
+                it->host->probing = false;
+            }
             it = probes_.erase(it);
         } else {
             ++it;
@@ -517,7 +524,9 @@ int MoonlightUi::show_modal(Modal &m, const std::function<bool()> &finished) {
                     }
                 }
             }
-            if (in_.pressed(KEY_B) && !m.busy) {
+            // B cancels any modal that offers buttons, including busy ones
+            // with a Cancel/Skip/Stay button (wake, reconnect, resume)
+            if (in_.pressed(KEY_B)) {
                 return -1;
             }
         } else if (!m.busy) {
@@ -742,13 +751,12 @@ void MoonlightUi::pcs_draw_top() {
         text("No PCs added yet", TOP_W / 2.0f, 76.0f, 0.6f, color::text,
              C2D_AlignCenter);
         auto lines =
-            wrap("Tap  Add PC  on the bottom screen and enter the IP address "
-                 "of the PC running Sunshine or GeForce Experience.",
+            wrap("Tap  Add PC  on the bottom screen to search the local "
+                 "network for PCs running Apollo, Sunshine or GeForce "
+                 "Experience, or to enter a PC's IP address.",
                  0.42f, TOP_W - 80.0f);
         text_block(lines, TOP_W / 2.0f, 104.0f, 0.42f, color::text_dim,
                    C2D_AlignCenter);
-        text("Automatic PC discovery is not available on the 3DS.",
-             TOP_W / 2.0f, 160.0f, 0.38f, color::text_faint, C2D_AlignCenter);
         draw_hints({{"A", "Add PC"}, {"START", "Settings"}, {"B", "Exit"}});
         return;
     }
@@ -883,6 +891,7 @@ void MoonlightUi::save_hosts() {
         r.address = h->address;
         r.port = h->port;
         r.name = h->name;
+        r.custom_name = h->custom_name;
         r.mac = h->mac;
         records.push_back(r);
     }
@@ -945,7 +954,8 @@ void MoonlightUi::apply_probe(PendingProbe &probe) {
         h.server_desc = r.desc;
         h.last_error.clear();
         bool changed = false;
-        if (!r.hostname.empty() && r.hostname != h.name) {
+        // The host's own name fills in the card unless the user renamed it
+        if (!h.custom_name && !r.hostname.empty() && r.hostname != h.name) {
             h.name = r.hostname;
             changed = true;
         }
@@ -1266,6 +1276,8 @@ void MoonlightUi::rename_host(const std::shared_ptr<HostEntry> &host) {
     std::string name;
     if (prompt_text("Name for this PC", host->display_name(), name, 40)) {
         host->name = name;
+        // An empty name goes back to the host's own name
+        host->custom_name = !name.empty();
         save_hosts();
     }
 }
@@ -1390,6 +1402,9 @@ void MoonlightUi::pair_host(const std::shared_ptr<HostEntry> &host,
         host->paired = true;
         host->server.paired = true;
         add_pair_address(host->address, host->port);
+        // Apollo only reports permissions, server commands and the MAC to a
+        // paired client, so check the PC again now that it is paired
+        probe_host_blocking(host, "Paired with " + host->display_name());
         toast("Paired with " + host->display_name());
     } else {
         show_error("Pairing failed", *error);
@@ -2052,7 +2067,7 @@ void MoonlightUi::queue_boxart(AppEntry &app) {
             }
             free(data);
         },
-        true);
+        true, true); // background, droppable
 }
 
 void MoonlightUi::free_boxart() {

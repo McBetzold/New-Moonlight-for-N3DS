@@ -89,8 +89,16 @@ std::vector<Record> load() {
                                                : tab3 - tab2 - 1);
             trim(r.name);
             if (tab3 != std::string::npos) {
-                r.mac = line.substr(tab3 + 1);
+                size_t tab4 = line.find('\t', tab3 + 1);
+                r.mac = line.substr(tab3 + 1, tab4 == std::string::npos
+                                                  ? std::string::npos
+                                                  : tab4 - tab3 - 1);
                 trim(r.mac);
+                if (tab4 != std::string::npos) {
+                    std::string flag = line.substr(tab4 + 1);
+                    trim(flag);
+                    r.custom_name = flag == "custom";
+                }
             }
         }
         trim(r.address);
@@ -107,7 +115,7 @@ void save(const std::vector<Record> &records) {
     if (!fd) {
         return;
     }
-    fprintf(fd, "# address<TAB>port<TAB>name<TAB>mac\n");
+    fprintf(fd, "# address<TAB>port<TAB>name<TAB>mac<TAB>custom (renamed)\n");
     for (const auto &r : records) {
         std::string name = r.name;
         for (auto &c : name) {
@@ -115,8 +123,9 @@ void save(const std::vector<Record> &records) {
                 c = ' ';
             }
         }
-        fprintf(fd, "%s\t%u\t%s\t%s\n", r.address.c_str(), (unsigned)r.port,
-                name.c_str(), r.mac.c_str());
+        fprintf(fd, "%s\t%u\t%s\t%s\t%s\n", r.address.c_str(),
+                (unsigned)r.port, name.c_str(), r.mac.c_str(),
+                r.custom_name ? "custom" : "");
     }
     fclose(fd);
 }

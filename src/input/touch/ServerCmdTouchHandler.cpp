@@ -42,17 +42,29 @@ ServerCmdTouchHandler::~ServerCmdTouchHandler() {
     consoleSelect(&DebugTouchHandler::topScreen);
 }
 
+// libctru's console rows are 1-based and 8 px tall. A 16 px touch zone z
+// starts at y = 16 * z, which is console row 2 * z + 1; text is printed
+// there so it sits inside the zone that taps on it select.
+static int zone_line(int zone) { return 2 * zone + 1; }
+
 void ServerCmdTouchHandler::draw() {
     consoleSelect(&console);
     consoleClear();
     const auto &names = ServerCommands::get();
-    printf("\x1b[0;0H\x1b[1;37m Server commands\x1b[0m");
+    if ((int)names.size() > MAX_ENTRIES) {
+        printf("\x1b[%d;1H\x1b[1;37m Server commands \x1b[0;90m(%d more not "
+               "shown)\x1b[0m",
+               zone_line(0), (int)names.size() - MAX_ENTRIES);
+    } else {
+        printf("\x1b[%d;1H\x1b[1;37m Server commands\x1b[0m", zone_line(0));
+    }
     if (names.empty()) {
-        printf("\x1b[3;0H\x1b[37m No server commands.\n\n"
+        printf("\x1b[%d;1H\x1b[37m No server commands.\n\n"
                " Define them in Apollo's web UI\n"
                " (Server Commands) and give this\n"
                " 3DS the \"Server Command\"\n"
-               " permission in the PIN tab.\x1b[0m");
+               " permission in the PIN tab.\x1b[0m",
+               zone_line(1));
     }
     int shown = (int)names.size() < MAX_ENTRIES ? (int)names.size()
                                                 : MAX_ENTRIES;
@@ -62,18 +74,24 @@ void ServerCmdTouchHandler::draw() {
         snprintf(line, sizeof(line), " %2d. %-33.33s", i + 1,
                  names[i].c_str());
         bool hi = i == pressed_row;
-        printf("\x1b[%d;0H%s%s\x1b[0m", (FIRST_ENTRY_ROW + i) * 2,
+        printf("\x1b[%d;1H%s%s\x1b[0m", zone_line(FIRST_ENTRY_ROW + i),
                hi ? "\x1b[30;47m" : "\x1b[37m", line);
     }
-    if ((int)names.size() > MAX_ENTRIES) {
-        printf("\x1b[%d;0H\x1b[90m (%d more not shown)\x1b[0m",
-               BACK_ROW * 2 - 1, (int)names.size() - MAX_ENTRIES);
-    }
-    printf("\x1b[%d;0H%s %-38s\x1b[0m", BACK_ROW * 2,
+    printf("\x1b[%d;1H%s %-38s\x1b[0m", zone_line(BACK_ROW),
            pressed_row == BACK_ROW ? "\x1b[30;47m" : "\x1b[36m",
            "<  Back to menu");
     if (status[0]) {
-        printf("\x1b[%d;0H\x1b[32m %-38s\x1b[0m", STATUS_ROW * 2, status);
+        printf("\x1b[%d;1H\x1b[32m %-38s\x1b[0m", zone_line(STATUS_ROW),
+               status);
+    }
+}
+
+void ServerCmdTouchHandler::tick() {
+    // The renderer that owned the bottom screen before this view may clear
+    // it a moment after the console is drawn; draw once more shortly after.
+    if (!redrawn && ++idle_events > 30) {
+        redrawn = true;
+        draw();
     }
 }
 
@@ -95,14 +113,7 @@ void ServerCmdTouchHandler::_handle_touch_down(touchPosition touch) {
     draw();
 }
 
-void ServerCmdTouchHandler::_handle_touch_hold(touchPosition touch) {
-    // The renderer that owned the bottom screen before this view may clear
-    // it a moment after the console is drawn; draw once more shortly after.
-    if (!redrawn && ++idle_events > 30) {
-        redrawn = true;
-        draw();
-    }
-}
+void ServerCmdTouchHandler::_handle_touch_hold(touchPosition touch) {}
 
 void ServerCmdTouchHandler::_handle_touch_up(touchPosition touch) {
     int row = pressed_row;

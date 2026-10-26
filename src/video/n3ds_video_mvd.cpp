@@ -51,6 +51,10 @@ static int mvd_service_height = 0;
 MvdDecoder::MvdDecoder(int videoFormat, int width, int height, int redrawRate,
                        void *context, int drFlags)
     : VideoDecoderBase(width, height) {
+    // New stream: frame-loss/stall tracking starts over, so a quick
+    // reconnect does not show the warning icon for its first seconds
+    N3dsRendererBase::reset_frame_stats();
+
     bool is_new_3ds;
     APT_CheckNew3DS(&is_new_3ds);
     if (!is_new_3ds) {
@@ -69,8 +73,13 @@ MvdDecoder::MvdDecoder(int videoFormat, int width, int height, int redrawRate,
                              MVD_CALC_WITH_LEVEL_FLAG_ENABLE_EXTRA_OP |
                              MVD_CALC_WITH_LEVEL_FLAG_UNK);
         config.level.level = MVD_H264_LEVEL_4_2;
-        config.width = width;
-        config.height = height;
+        // The service lives for the whole process, so size its work buffer
+        // for the largest preset (800x480) even when the first stream is
+        // smaller; otherwise switching 400x240 -> 800x480 needs a restart
+        int buf_width = width > 800 ? width : 800;
+        int buf_height = height > 480 ? height : 480;
+        config.width = buf_width;
+        config.height = buf_height;
         uint32_t size = 0;
         status = mvdstdCalculateBufferSize(&config, &size);
         if (status) {
@@ -86,8 +95,8 @@ MvdDecoder::MvdDecoder(int videoFormat, int width, int height, int redrawRate,
             throw std::runtime_error("mvdstdInit failed");
         }
         mvd_service_initialized = true;
-        mvd_service_width = width;
-        mvd_service_height = height;
+        mvd_service_width = buf_width;
+        mvd_service_height = buf_height;
     } else if (width > mvd_service_width || height > mvd_service_height) {
         fprintf(stderr,
                 "Warning: MVD work buffer was sized for %dx%d; %dx%d may fail "
