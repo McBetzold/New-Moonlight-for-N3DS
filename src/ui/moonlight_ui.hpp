@@ -51,7 +51,11 @@ struct HostEntry {
     bool online = false;
     bool paired = false;
     bool probing = false;
+    // App ID running on the host; 0 = none, -1 = something is running but
+    // its ID is not known yet (Apollo with Input Only Mode only reports the
+    // running app's UUID; see MoonlightUi::resolve_running_app)
     int current_game = 0;
+    std::string running_uuid; // Apollo: UUID of the running app, or ""
     std::string server_desc;
     std::string last_error;
     SERVER_DATA server{};
@@ -68,6 +72,7 @@ struct ProbeResult {
     bool ok = false;
     bool paired = false;
     int current_game = 0;
+    std::string running_uuid;
     std::string hostname;
     std::string desc;
     std::string error;
@@ -264,6 +269,9 @@ class MoonlightUi {
     void requeue_boxart();
     void leave_apps();
     std::string running_app_name() const;
+    // Turns the host's running-app UUID into an app ID using the loaded app
+    // list (Apollo's Input Only Mode reports currentgame 0 while an app runs)
+    void resolve_running_app(HostEntry &host);
     bool quit_running_app(const std::shared_ptr<HostEntry> &host);
 
     // ---- stream launch (moonlight_ui_stream.cpp)
