@@ -86,53 +86,49 @@ void N3dsRendererBase::note_frame(int frame_number,
     }
 }
 
-// Draws a small bitmap onto the top screen (both eye buffers in 3D) at
-// (x0, y0) in 400x240 screen coordinates. In each row '#' is drawn in
-// `hash`, '.' in `dot` and anything else is left alone. The framebuffer is
-// column-major (pixel (x, y) at x * height + (height - 1 - y)); in wide mode
-// it has 800 columns, so every screen column is two framebuffer columns.
-static void blit_top(const char *const *rows, int row_count, int x0, int y0,
-                     u16 hash, u16 dot) {
-    gfx3dSide_t sides[2] = {GFX_LEFT, GFX_RIGHT};
-    int side_count = gfxIs3D() ? 2 : 1;
-    int width = 0;
+// Draws a small bitmap into the decoded picture, before the GPU scales it to
+// the screen, so it travels the same path as the video. (sx, sy) is in
+// 400x240 top-screen coordinates; each icon pixel becomes a block of picture
+// pixels so the icon has the same on-screen size at any stream resolution.
+// The picture is row-major RGB565 with a row stride of MOON_CTR_VIDEO_TEX_W.
+// In each row '#' is drawn in `hash`, '.' in `dot`, anything else is skipped.
+static void blit_picture(uint8_t *source, int image_w, int image_h,
+                         const char *const *rows, int row_count, int sx,
+                         int sy, u16 hash, u16 dot) {
+    u16 *pic = (u16 *)source;
+    int bw = std::max(1, image_w / GSP_SCREEN_HEIGHT_TOP);
+    int bh = std::max(1, image_h / GSP_SCREEN_WIDTH);
+    int x0 = sx * image_w / GSP_SCREEN_HEIGHT_TOP;
+    int y0 = sy * image_h / GSP_SCREEN_WIDTH;
     for (int r = 0; r < row_count; r++) {
-        width = std::max(width, (int)strlen(rows[r]));
-    }
-    for (int s = 0; s < side_count; s++) {
-        // Reports (240, 400 or 800): the column height, then the width
-        u16 fb_h = 0, fb_w = 0;
-        u16 *fb = (u16 *)gfxGetFramebuffer(GFX_TOP, sides[s], &fb_h, &fb_w);
-        if (fb == NULL || fb_h == 0 || fb_w == 0) {
-            continue;
-        }
-        int xs = fb_w > GSP_SCREEN_HEIGHT_TOP ? 2 : 1;
-        for (int r = 0; r < row_count; r++) {
-            int y = y0 + r;
-            if (y < 0 || y >= fb_h) {
+        for (int c = 0; rows[r][c]; c++) {
+            char ch = rows[r][c];
+            if (ch != '#' && ch != '.') {
                 continue;
             }
-            for (int c = 0; rows[r][c]; c++) {
-                char ch = rows[r][c];
-                if (ch != '#' && ch != '.') {
+            u16 color = ch == '#' ? hash : dot;
+            for (int dy = 0; dy < bh; dy++) {
+                int y = y0 + r * bh + dy;
+                if (y < 0 || y >= image_h) {
                     continue;
                 }
-                for (int k = 0; k < xs; k++) {
-                    int x = (x0 + c) * xs + k;
-                    if (x >= 0 && x < fb_w) {
-                        fb[x * fb_h + (fb_h - 1 - y)] = ch == '#' ? hash : dot;
+                for (int dx = 0; dx < bw; dx++) {
+                    int x = x0 + c * bw + dx;
+                    if (x >= 0 && x < image_w) {
+                        pic[y * MOON_CTR_VIDEO_TEX_W + x] = color;
                     }
                 }
             }
         }
-        // The CPU wrote through its cache; make the pixels visible to the
-        // display before the buffer is presented
-        int first_col = std::max(0, x0 * xs);
-        int last_col = std::min((int)fb_w, (x0 + width) * xs);
-        if (last_col > first_col) {
-            GSPGPU_FlushDataCache(fb + first_col * fb_h,
-                                  (last_col - first_col) * fb_h * sizeof(u16));
-        }
+    }
+    // The GPU reads the picture from memory; push the CPU's writes out of
+    // its cache first
+    int first_row = std::max(0, y0);
+    int last_row = std::min(image_h, y0 + row_count * bh);
+    if (last_row > first_row) {
+        GSPGPU_FlushDataCache(pic + first_row * MOON_CTR_VIDEO_TEX_W,
+                              (last_row - first_row) * MOON_CTR_VIDEO_TEX_W *
+                                  sizeof(u16));
     }
 }
 
@@ -154,20 +150,35 @@ static const char *const POINTER_ICON[] = {
     "      ##",
 };
 
-void N3dsRendererBase::draw_connection_marker() {
+void N3dsRendererBase::draw_connection_marker(uint8_t *source,
+                                              bool side_by_side) {
     auto listener = N3dsConnectionListener::get_instance();
     bool poor = listener != nullptr && listener->connection_is_poor();
     // Frames lost or stalled within the last three seconds
     bool recent = last_trouble_tick != 0 &&
                   svcGetSystemTick() - last_trouble_tick < 3 * SYSCLOCK_ARM11;
-    if (poor || recent) {
-        blit_top(WARNING_ICON, sizeof(WARNING_ICON) / sizeof(WARNING_ICON[0]),
-                 GSP_SCREEN_HEIGHT_TOP - 6 - 14, 5, COLOR_DARK, COLOR_YELLOW);
+    bool mouse = mouse_indicator;
+    if (!poor && !recent && !mouse) {
+        return;
     }
-    if (mouse_indicator) {
-        // The C-stick is driving the mouse (hold START to switch back)
-        blit_top(POINTER_ICON, sizeof(POINTER_ICON) / sizeof(POINTER_ICON[0]),
-                 6, 5, COLOR_DARK, COLOR_WHITE);
+    // In side-by-side 3D each half of the picture is one eye; draw in both
+    // halves at the matching spot so the icon sits on the screen plane
+    int halves = side_by_side ? 2 : 1;
+    int half_w = image_width / halves;
+    for (int h = 0; h < halves; h++) {
+        uint8_t *base = source + h * half_w * sizeof(u16);
+        if (poor || recent) {
+            blit_picture(base, half_w, image_height, WARNING_ICON,
+                         sizeof(WARNING_ICON) / sizeof(WARNING_ICON[0]),
+                         GSP_SCREEN_HEIGHT_TOP - 6 - 14, 5, COLOR_DARK,
+                         COLOR_YELLOW);
+        }
+        if (mouse) {
+            // The C-stick is driving the mouse (hold START to switch back)
+            blit_picture(base, half_w, image_height, POINTER_ICON,
+                         sizeof(POINTER_ICON) / sizeof(POINTER_ICON[0]), 6, 5,
+                         COLOR_DARK, COLOR_WHITE);
+        }
     }
 }
 
@@ -325,6 +336,12 @@ void N3dsRendererBase::write_px_to_framebuffer_gpu(
     // TODO: If we can use rotation from the decoder, we can do a 2x downscale
     // using display transfer and skip P3D. Not necessary because PICA is
     // significantly faster than the decoder.
+
+    // Status icons (poor connection, C-stick mouse) are painted into the
+    // picture itself so they reach the screen with the video
+    if (screen == GFX_TOP) {
+        draw_connection_marker(source, stereo_on && !stereo.full_frame);
+    }
 
     // Tile the source image into the scratch buffer.
     GX_DisplayTransfer(
@@ -597,9 +614,6 @@ void N3dsRendererBase::write_px_to_framebuffer_gpu(
     perf_fbcopy_ticks = svcGetSystemTick() - start_ticks;
     if (debug) {
         log_perf_counters();
-    }
-    if (screen == GFX_TOP) {
-        draw_connection_marker();
     }
 
     gfxScreenSwapBuffers(screen, true);
