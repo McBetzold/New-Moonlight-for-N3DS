@@ -33,6 +33,11 @@ class N3dsInput : public ISubscriber {
     void accept(IMessage *msg) override;
     void n3dsinput_handle_event();
     void force_touchscreen_menu();
+    // Announce and remove the controller. They need the input stream, so
+    // they are called on the input thread once the connection is up and
+    // just before it is stopped, not from the constructor and destructor.
+    void stream_started();
+    void stream_ending();
 
   private:
     void _add_gamepad();
@@ -56,6 +61,8 @@ class N3dsInput : public ISubscriber {
     bool use_triggers_for_mouse = false;
     bool motion_controls = false;
     bool menu_active = false;
+    // View-only mode: only the stream menu works, nothing else is sent
+    bool view_only = false;
 
     // Hold START to switch the C-stick between right stick and mouse
     bool cstick_mouse_enabled = true;

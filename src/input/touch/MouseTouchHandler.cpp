@@ -25,6 +25,13 @@
 
 MouseTouchHandler::MouseTouchHandler() {}
 
+// Let go of a held button if the view is switched with the stylus still down
+MouseTouchHandler::~MouseTouchHandler() {
+    if (mouse_button > -1) {
+        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, mouse_button);
+    }
+}
+
 void MouseTouchHandler::_handle_touch_down(touchPosition touch) {
     if (touch.py < 175) {
         previous_x = touch.px;

@@ -25,6 +25,7 @@
 
 #include <cstring>
 #include <fstream>
+#include <sys/stat.h>
 #include <getopt.h>
 
 #define MOONLIGHT_PATH "/moonlight"
@@ -213,6 +214,12 @@ bool config_file_parse(PCONFIGURATION config) {
     std::ifstream config_file(MOONLIGHT_3DS_PATH "/moonlight.conf");
     std::string line;
     while (std::getline(config_file, line)) {
+        // A file edited on Windows has CRLF endings; drop the CR and any
+        // trailing spaces so "true" still reads as true
+        while (!line.empty() && (line.back() == '\r' || line.back() == ' ' ||
+                                 line.back() == '\t')) {
+            line.pop_back();
+        }
         char *key = NULL, *value = NULL;
         if (sscanf(line.c_str(), "%ms = %m[^\n]", &key, &value) == 2) {
             if (strcmp(key, "address") == 0) {
@@ -232,11 +239,13 @@ bool config_file_parse(PCONFIGURATION config) {
     return true;
 }
 
-void config_save(char *filename, PCONFIGURATION config) {
+bool config_save(char *filename, PCONFIGURATION config) {
+    // On a fresh SD card nothing has created the folder yet
+    mkdir(MOONLIGHT_3DS_PATH, 0777);
     FILE *fd = fopen(filename, "w");
     if (fd == NULL) {
         fprintf(stderr, "Can't open configuration file: %s\n", filename);
-        exit(EXIT_FAILURE);
+        return false;
     }
 
     write_config_int(fd, "width", config->stream.width);
@@ -272,7 +281,7 @@ void config_save(char *filename, PCONFIGURATION config) {
     if (strcmp(config->app, "Steam") != 0)
         write_config_string(fd, "app", config->app);
 
-    fclose(fd);
+    return fclose(fd) == 0;
 }
 
 void config_parse(int argc, char *argv[], PCONFIGURATION config) {

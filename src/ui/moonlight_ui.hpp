@@ -225,7 +225,8 @@ class MoonlightUi {
     bool prompt_text(const std::string &hint, const std::string &initial,
                      std::string &out, size_t max_len = 60,
                      bool allow_empty = false);
-    bool prompt_number(const std::string &hint, int initial, int &out);
+    bool prompt_number(const std::string &hint, int initial, int &out,
+                       bool allow_zero = false);
 
     // ---- Computers view
     void pcs_update(const Input &in);

@@ -21,14 +21,24 @@
 
 MirrorTouchHandler::MirrorTouchHandler() {}
 
+// Switching views (HOME) with the stylus down destroys the handler before the
+// touch ends; let go of the button so the host does not keep dragging
+MirrorTouchHandler::~MirrorTouchHandler() {
+    if (pressed) {
+        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
+    }
+}
+
 void MirrorTouchHandler::_handle_touch_down(touchPosition touch) {
     LiSendMousePositionEvent(touch.px, touch.py, GSP_SCREEN_HEIGHT_BOTTOM,
                              GSP_SCREEN_WIDTH);
     LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
+    pressed = true;
 }
 
 void MirrorTouchHandler::_handle_touch_up(touchPosition touch) {
     LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
+    pressed = false;
 }
 
 void MirrorTouchHandler::_handle_touch_hold(touchPosition touch) {

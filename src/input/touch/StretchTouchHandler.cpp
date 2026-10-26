@@ -37,13 +37,22 @@ static inline void send_position(touchPosition touch) {
 
 StretchTouchHandler::StretchTouchHandler() {}
 
+// Let go of the button if the view is switched with the stylus still down
+StretchTouchHandler::~StretchTouchHandler() {
+    if (pressed) {
+        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
+    }
+}
+
 void StretchTouchHandler::_handle_touch_down(touchPosition touch) {
     send_position(touch);
     LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
+    pressed = true;
 }
 
 void StretchTouchHandler::_handle_touch_up(touchPosition touch) {
     LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
+    pressed = false;
 }
 
 void StretchTouchHandler::_handle_touch_hold(touchPosition touch) {

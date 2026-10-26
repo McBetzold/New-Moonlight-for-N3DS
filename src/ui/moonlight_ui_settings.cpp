@@ -162,7 +162,8 @@ void MoonlightUi::settings_edit_resolution() {
     if (!prompt_number("Stream height in pixels", h, h)) {
         return;
     }
-    if (!prompt_number("Host display width (0 = same as stream)", hw, hw)) {
+    if (!prompt_number("Host display width (0 = same as stream)", hw, hw,
+                       true)) {
         return;
     }
     if (hw > 0) {
@@ -427,7 +428,7 @@ void MoonlightUi::settings_build() {
     header("Input Settings");
     toggle("View-only mode",
            "Shows the stream without sending any button, stick or touch input "
-           "to the PC.",
+           "to the PC. HOME still opens the stream menu.",
            &cfg->viewonly);
     toggle("Motion controls",
            "Sends the 3DS gyroscope and accelerometer to games that request "
@@ -571,8 +572,9 @@ void MoonlightUi::settings_enter() {
 
 void MoonlightUi::settings_leave() {
     char *config_file_path = (char *)MOONLIGHT_3DS_PATH "/moonlight.conf";
-    config_save(config_file_path, config_);
-    toast("Settings saved");
+    toast(config_save(config_file_path, config_)
+              ? "Settings saved"
+              : "Could not save settings to the SD card");
     view_ = cur_host_ ? View::Apps : View::Pcs;
 }
 

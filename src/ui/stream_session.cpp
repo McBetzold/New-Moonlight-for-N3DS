@@ -45,12 +45,14 @@ static void dispatch_loop(void *_unused_) {
 static void input_loop(void *input_handler_in) {
     N3dsInput *input_handler = static_cast<N3dsInput *>(input_handler_in);
     auto connection_listener = N3dsConnectionListener::get_instance();
+    input_handler->stream_started();
     input_handler->force_touchscreen_menu();
     while (connection_listener != nullptr &&
            !connection_listener->is_connection_closed()) {
         gspWaitForAnyEvent();
         input_handler->n3dsinput_handle_event();
     }
+    input_handler->stream_ending();
 }
 
 // Top-screen panel for input-only sessions, drawn with a text console. It is
@@ -146,7 +148,9 @@ void run_loop(PCONFIGURATION config, N3dsConnectionListener *listener,
     s32 priority = 0x30;
     svcGetThreadPriority(&priority, CUR_THREAD_HANDLE);
     Thread input_thread = nullptr;
-    if (!config->viewonly && input_handler != nullptr) {
+    // View-only streams still run the input thread: it shows the picture
+    // (the first touch-state message picks the renderer) and the stream menu
+    if (input_handler != nullptr) {
         input_thread = threadCreate(input_loop, input_handler.get(),
                                     stack_size, priority, -1, false);
     }
@@ -177,6 +181,9 @@ void run_loop(PCONFIGURATION config, N3dsConnectionListener *listener,
         threadJoin(dispatch_thread, U64_MAX);
         threadFree(dispatch_thread);
     }
+    // Anything posted after the last dispatch belongs to this stream; do not
+    // let it reach the next one (a late EXIT_STREAM would end it at once)
+    MessageDispatcher::get_instance()->clear();
 }
 
 } // namespace stream_session

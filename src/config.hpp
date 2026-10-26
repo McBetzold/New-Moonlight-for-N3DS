@@ -149,4 +149,5 @@ const char *stereo_3d_mode_name(STEREO_3D_MODE mode);
 bool config_file_parse(char *filename, PCONFIGURATION config);
 void config_parse(int argc, char *argv[], PCONFIGURATION config);
 void parse_argument(int c, char *value, PCONFIGURATION config);
-void config_save(char *filename, PCONFIGURATION config);
+// Returns false if the file could not be written
+bool config_save(char *filename, PCONFIGURATION config);

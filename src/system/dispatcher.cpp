@@ -74,3 +74,9 @@ void MessageDispatcher::dispatch_all() {
         post_immediate(m);
     }
 }
+
+void MessageDispatcher::clear() {
+    message_lock.lock();
+    std::queue<std::shared_ptr<IMessage>>().swap(message_queue);
+    message_lock.unlock();
+}

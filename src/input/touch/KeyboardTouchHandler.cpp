@@ -36,6 +36,15 @@ KeyboardTouchHandler::KeyboardTouchHandler()
     handle_default();
 }
 
+// Switching views (HOME) while a key is held destroys the handler before the
+// touch ends; send the key-up so the host does not keep repeating the key
+KeyboardTouchHandler::~KeyboardTouchHandler() {
+    if (key_down) {
+        LiSendKeyboardEvent(active_keycode.code, KEY_ACTION_UP,
+                            get_key_mod());
+    }
+}
+
 void KeyboardTouchHandler::set_screen(const uint8_t *bgr_buffer, int bgr_size) {
     auto message =
         std::make_shared<KeyboardStateChangedMsg>(bgr_buffer, 0, bgr_size);
@@ -163,6 +172,7 @@ void KeyboardTouchHandler::_handle_touch_down(touchPosition touch) {
         }
         int modifiers = get_key_mod();
         LiSendKeyboardEvent(active_keycode.code, KEY_ACTION_DOWN, modifiers);
+        key_down = true;
     }
 }
 
@@ -173,6 +183,7 @@ void KeyboardTouchHandler::_handle_touch_up(touchPosition touch) {
 
     int modifiers = get_key_mod();
     LiSendKeyboardEvent(active_keycode.code, KEY_ACTION_UP, modifiers);
+    key_down = false;
 
     if (active_keycode.code != SHIFT_KC && active_keycode.code != CTRL_KC &&
         active_keycode.code != ALT_KC) {
