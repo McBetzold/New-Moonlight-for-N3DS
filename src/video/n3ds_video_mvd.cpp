@@ -269,10 +269,14 @@ int MvdDecoder::submit_decode_unit(PDECODE_UNIT decodeUnit) {
     write_idx = (write_idx + 1) % MVD_FRAME_QUEUE_DEPTH;
     LightSemaphore_Release(&filled_slots, 1);
 
-    // If MVD never gets an IDR frame, everything shows up gray
+    // If MVD never gets an IDR frame, everything shows up gray. The host
+    // normally starts with one; asking for another anyway makes the client
+    // drop frames until it arrives, which flashed the poor-connection icon.
     if (first_frame) {
         first_frame = false;
-        return DR_NEED_IDR;
+        if (decodeUnit->frameType != FRAME_TYPE_IDR) {
+            return DR_NEED_IDR;
+        }
     }
     return DR_OK;
 }

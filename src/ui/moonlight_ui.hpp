@@ -47,6 +47,7 @@ struct HostEntry {
     std::string name;
     std::string mac; // for Wake-on-LAN, learned from the host while paired
     bool custom_name = false; // renamed by the user; keep the host's own out
+    bool deleted = false;     // removed from the list; ignore late results
 
     bool status_known = false;
     bool online = false;
@@ -220,8 +221,10 @@ class MoonlightUi {
                  bool danger = false);
     int menu(const std::string &title, const std::vector<std::string> &items);
     bool wait_job(const std::shared_ptr<Worker::Job> &job, Modal &m);
+    // allow_empty: OK with an empty field returns true with out == ""
     bool prompt_text(const std::string &hint, const std::string &initial,
-                     std::string &out, size_t max_len = 60);
+                     std::string &out, size_t max_len = 60,
+                     bool allow_empty = false);
     bool prompt_number(const std::string &hint, int initial, int &out);
 
     // ---- Computers view

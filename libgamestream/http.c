@@ -124,7 +124,10 @@ int http_request(char *url, PHTTP_DATA data) {
     return GS_OK;
 }
 
-void http_cleanup() { curl_easy_cleanup(curl); }
+void http_cleanup() {
+    curl_easy_cleanup(curl);
+    curl = NULL; // curl_easy_cleanup(NULL) is a no-op on the next call
+}
 
 PHTTP_DATA http_create_data() {
     PHTTP_DATA data = malloc(sizeof(HTTP_DATA));

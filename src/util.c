@@ -79,6 +79,9 @@ int ensure_linear_buf_size(void **buf, size_t *buf_size, size_t required_size) {
     *buf = linearAlloc(*buf_size);
     if (!*buf) {
         fprintf(stderr, "Failed to allocate %zu bytes\n", *buf_size);
+        // The old buffer is gone; record that so the next call allocates
+        // again instead of copying into NULL
+        *buf_size = 0;
         return 1;
     }
     return 0;

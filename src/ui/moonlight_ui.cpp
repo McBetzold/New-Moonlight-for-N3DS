@@ -180,9 +180,10 @@ bool MoonlightUi::poll() {
 void MoonlightUi::pump() {
     for (auto it = probes_.begin(); it != probes_.end();) {
         if (it->job->is_done()) {
-            // Skip results for a PC that was deleted while it was checked
-            if (std::find(hosts_.begin(), hosts_.end(), it->host) !=
-                hosts_.end()) {
+            // Skip results for a PC that was deleted while it was checked. (A
+            // PC being added is probed before it joins hosts_, so this must
+            // be a flag rather than a hosts_ lookup.)
+            if (!it->host->deleted) {
                 apply_probe(*it);
             } else {
                 it->host->probing = false;
@@ -590,7 +591,7 @@ bool MoonlightUi::wait_job(const std::shared_ptr<Worker::Job> &job, Modal &m) {
 
 bool MoonlightUi::prompt_text(const std::string &hint,
                               const std::string &initial, std::string &out,
-                              size_t max_len) {
+                              size_t max_len, bool allow_empty) {
     std::vector<char> buf(max_len + 1, 0);
     SwkbdState swkbd;
     swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 2, (int)max_len);
@@ -598,7 +599,9 @@ bool MoonlightUi::prompt_text(const std::string &hint,
     if (!initial.empty()) {
         swkbdSetInitialText(&swkbd, initial.c_str());
     }
-    swkbdSetValidation(&swkbd, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
+    swkbdSetValidation(&swkbd,
+                       allow_empty ? SWKBD_ANYTHING : SWKBD_NOTEMPTY_NOTBLANK,
+                       0, 0);
     swkbdSetButton(&swkbd, SWKBD_BUTTON_LEFT, "Cancel", false);
     swkbdSetButton(&swkbd, SWKBD_BUTTON_RIGHT, "OK", true);
     SwkbdButton pressed = swkbdInputText(&swkbd, buf.data(), buf.size());
@@ -608,7 +611,7 @@ bool MoonlightUi::prompt_text(const std::string &hint,
     }
     out = buf.data();
     trim(out);
-    return !out.empty();
+    return allow_empty || !out.empty();
 }
 
 bool MoonlightUi::prompt_number(const std::string &hint, int initial,
@@ -1274,12 +1277,26 @@ void MoonlightUi::pc_options() {
 
 void MoonlightUi::rename_host(const std::shared_ptr<HostEntry> &host) {
     std::string name;
-    if (prompt_text("Name for this PC", host->display_name(), name, 40)) {
-        host->name = name;
-        // An empty name goes back to the host's own name
-        host->custom_name = !name.empty();
-        save_hosts();
+    if (!prompt_text("Name for this PC (empty = the PC's own name)",
+                     host->display_name(), name, 40, true)) {
+        return;
     }
+    if (name.empty()) {
+        // Back to the name the PC reports; the next status check fills it in
+        // if it is not known yet
+        host->custom_name = false;
+        host->name = (host->server_valid && host->server.hostname &&
+                      host->server.hostname[0])
+                         ? host->server.hostname
+                         : "";
+        probe_host(host, true);
+    } else if (name != host->display_name()) {
+        host->name = name;
+        host->custom_name = true;
+    } else {
+        return; // unchanged
+    }
+    save_hosts();
 }
 
 void MoonlightUi::delete_host(const std::shared_ptr<HostEntry> &host) {
@@ -1289,6 +1306,7 @@ void MoonlightUi::delete_host(const std::shared_ptr<HostEntry> &host) {
                  "Delete", "Cancel", true)) {
         return;
     }
+    host->deleted = true;
     hosts_.erase(std::remove(hosts_.begin(), hosts_.end(), host), hosts_.end());
     remove_pair_address(host->address, host->port);
     save_hosts();
@@ -2081,8 +2099,11 @@ void MoonlightUi::free_boxart() {
 
 void MoonlightUi::requeue_boxart() {
     for (auto &app : apps_) {
+        // Also art whose download was dropped (e.g. when a stream started)
+        bool dropped = app.art_state == AppEntry::ArtState::Loading &&
+                       app.job && app.job->cancelled.load();
         if (app.art_state == AppEntry::ArtState::Pending ||
-            app.art_state == AppEntry::ArtState::Missing) {
+            app.art_state == AppEntry::ArtState::Missing || dropped) {
             queue_boxart(app);
         }
     }
