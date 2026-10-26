@@ -615,7 +615,7 @@ bool MoonlightUi::prompt_text(const std::string &hint,
 }
 
 bool MoonlightUi::prompt_number(const std::string &hint, int initial,
-                                int &out) {
+                                int &out, bool allow_zero) {
     char buf[16] = {0};
     SwkbdState swkbd;
     swkbdInit(&swkbd, SWKBD_TYPE_NUMPAD, 2, 8);
@@ -631,7 +631,7 @@ bool MoonlightUi::prompt_number(const std::string &hint, int initial,
         return false;
     }
     int value = atoi(buf);
-    if (value <= 0) {
+    if (value < 0 || (value == 0 && !allow_zero)) {
         return false;
     }
     out = value;

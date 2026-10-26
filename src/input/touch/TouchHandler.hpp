@@ -133,7 +133,7 @@ class GamepadTouchHandler : public TouchHandlerBase {
 class MouseTouchHandler : public TouchHandlerBase {
   public:
     MouseTouchHandler();
-    ~MouseTouchHandler() = default;
+    ~MouseTouchHandler();
 
   private:
     void _handle_touch_down(touchPosition touch) override;
@@ -160,7 +160,7 @@ struct KeyInfo {
 class KeyboardTouchHandler : public TouchHandlerBase {
   public:
     KeyboardTouchHandler();
-    ~KeyboardTouchHandler() = default;
+    ~KeyboardTouchHandler();
 
   private:
     void _handle_touch_down(touchPosition touch) override;
@@ -184,6 +184,8 @@ class KeyboardTouchHandler : public TouchHandlerBase {
     KeyInfo alt_info = {KEY_DISABLED, 128, 192, 0, 37};
     KeyInfo shift_keys = {KEY_SHIFT, 0, GSP_SCREEN_HEIGHT_BOTTOM, 37, 70};
     bool alt_keyboard_active = false;
+    // A key sent down whose key-up has not been sent yet
+    bool key_down = false;
     std::map<int, keycode_info> *selected_keycodes = nullptr;
 };
 
@@ -210,23 +212,29 @@ class PassthroughTouchHandler : public TouchHandlerBase {
 class MirrorTouchHandler : public TouchHandlerBase {
   public:
     MirrorTouchHandler();
-    ~MirrorTouchHandler() = default;
+    ~MirrorTouchHandler();
 
   private:
     void _handle_touch_down(touchPosition touch) override;
     void _handle_touch_up(touchPosition touch) override;
     void _handle_touch_hold(touchPosition touch) override;
+
+  private:
+    bool pressed = false;
 };
 
 class StretchTouchHandler : public TouchHandlerBase {
   public:
     StretchTouchHandler();
-    ~StretchTouchHandler() = default;
+    ~StretchTouchHandler();
 
   private:
     void _handle_touch_down(touchPosition touch) override;
     void _handle_touch_up(touchPosition touch) override;
     void _handle_touch_hold(touchPosition touch) override;
+
+  private:
+    bool pressed = false;
 };
 
 class MagnifyTouchHandler : public TouchHandlerBase {

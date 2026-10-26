@@ -25,6 +25,8 @@ class MessageDispatcher {
     void post_immediate(std::shared_ptr<IMessage> m);
     void post(std::shared_ptr<IMessage> m);
     void dispatch_all();
+    // Drops undelivered messages (between streams)
+    void clear();
 
   private:
     bool _is_queue_empty();

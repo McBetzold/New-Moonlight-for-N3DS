@@ -54,9 +54,9 @@ N3dsInput::N3dsInput(int image_width, int image_height,
     motion_controls = cfg.motion_controls;
     cstick_mouse_enabled = cfg.cstick_mouse;
     auto_sprint = cfg.auto_sprint;
+    view_only = cfg.viewonly;
     // The button and gamepad-view mapping used for this stream
     ButtonMapping::set_active(&cfg);
-    _add_gamepad();
 
     aptSetHomeAllowed(false);
     touch_handler = std::make_unique<N3dsTouchscreenInput>(
@@ -72,7 +72,6 @@ N3dsInput::~N3dsInput() {
     pDispatcher->unsubscribe(MessageType::ENABLE_ACCEL, this);
     pDispatcher->unsubscribe(MessageType::ENABLE_GYRO, this);
 
-    _remove_gamepad();
     N3dsRendererBase::set_mouse_indicator(false);
     gamepad_state = GAMEPAD_STATE();
     previous_state = GAMEPAD_STATE();
@@ -86,6 +85,18 @@ void N3dsInput::accept(IMessage *msg) {
         enable_accel.store(true);
     } else if (msg->getMessageType() == MessageType::ENABLE_GYRO) {
         enable_gyro.store(true);
+    }
+}
+
+void N3dsInput::stream_started() {
+    if (!view_only) {
+        _add_gamepad();
+    }
+}
+
+void N3dsInput::stream_ending() {
+    if (!view_only) {
+        _remove_gamepad();
     }
 }
 
@@ -190,7 +201,11 @@ void N3dsInput::n3dsinput_handle_event() {
     u32 kUp = hidKeysUp();
     previous_state = gamepad_state;
 
-    touch_handler->n3dsinput_handle_touch(kDown, kUp);
+    // In view-only mode the stream menu still works (views, EXIT), but the
+    // other touch views would send mouse, keyboard or touch input
+    if (!view_only || touch_handler->is_menu_active()) {
+        touch_handler->n3dsinput_handle_touch(kDown, kUp);
+    }
 
     // Rebuilt from the held buttons every frame through the button mapping
     _read_buttons(hidKeysHeld());
@@ -215,6 +230,9 @@ void N3dsInput::n3dsinput_handle_event() {
         return;
     } else {
         menu_active = false;
+    }
+    if (view_only) {
+        return;
     }
 
     circlePosition cpad_pos;

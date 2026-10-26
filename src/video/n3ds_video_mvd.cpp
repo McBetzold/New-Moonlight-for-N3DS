@@ -255,7 +255,8 @@ int MvdDecoder::submit_decode_unit(PDECODE_UNIT decodeUnit) {
                                    AV_INPUT_BUFFER_PADDING_SIZE)) {
         printf("Out of linear memory!\n");
         LightSemaphore_Release(&free_slots, 1);
-        return DR_OK;
+        // Later frames depend on the one just dropped; ask for a fresh IDR
+        return DR_NEED_IDR;
     }
 
     while (entry != NULL) {

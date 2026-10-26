@@ -218,11 +218,10 @@ StreamOutcome MoonlightUi::run_stream(const std::shared_ptr<HostEntry> &host,
     Worker::instance().drop_background();
     free_boxart();
 
-    std::shared_ptr<N3dsInput> input_handler = nullptr;
-    if (!cfg->viewonly) {
-        input_handler = std::make_shared<N3dsInput>(cfg->stream.width,
-                                                    cfg->stream.height, *cfg);
-    }
+    // Created in view-only mode too, which then sends nothing but keeps the
+    // stream menu and the HOME exit
+    std::shared_ptr<N3dsInput> input_handler = std::make_shared<N3dsInput>(
+        cfg->stream.width, cfg->stream.height, *cfg);
 
     AUDIO_RENDERER_CALLBACKS *audio_callbacks =
         cfg->localaudio ? &audio_callbacks_mock : &audio_callbacks_n3ds;
