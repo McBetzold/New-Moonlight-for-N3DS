@@ -18,6 +18,7 @@
  */
 
 #include "n3ds_input.hpp"
+#include "button_mapping.hpp"
 #include "../system/apt_state.hpp"
 #include "../system/dispatcher.hpp"
 #include "../video/renderer/N3dsRenderer.hpp"
@@ -45,28 +46,16 @@
 #define CONTROLLER_NUMBER 0
 #define ACTIVE_GAMEPAD_MASK 1
 
-N3dsInput::N3dsInput(int image_width, int image_height, bool swap_face_buttons,
-                     bool swap_triggers_and_shoulders,
-                     bool use_triggers_for_mouse_in, bool motion_controls_in,
-                     bool cstick_mouse_in) {
+N3dsInput::N3dsInput(int image_width, int image_height,
+                     const CONFIGURATION &cfg) {
     hidInit();
     HIDUSER_GetGyroscopeRawToDpsCoefficient(&gyro_coeff);
-    use_triggers_for_mouse = use_triggers_for_mouse_in;
-    motion_controls = motion_controls_in;
-    cstick_mouse_enabled = cstick_mouse_in;
+    use_triggers_for_mouse = cfg.use_triggers_for_mouse;
+    motion_controls = cfg.motion_controls;
+    cstick_mouse_enabled = cfg.cstick_mouse;
+    // The button and gamepad-view mapping used for this stream
+    ButtonMapping::set_active(&cfg);
     _add_gamepad();
-
-    // Ternary setup is less efficient, but more readable.
-    // We can afford the minor performance cost here.
-    CUSTOM_KEY_A = swap_face_buttons ? KEY_B : KEY_A;
-    CUSTOM_KEY_B = swap_face_buttons ? KEY_A : KEY_B;
-    CUSTOM_KEY_X = swap_face_buttons ? KEY_Y : KEY_X;
-    CUSTOM_KEY_Y = swap_face_buttons ? KEY_X : KEY_Y;
-
-    CUSTOM_KEY_L = swap_triggers_and_shoulders ? KEY_ZL : KEY_L;
-    CUSTOM_KEY_R = swap_triggers_and_shoulders ? KEY_ZR : KEY_R;
-    CUSTOM_KEY_ZL = swap_triggers_and_shoulders ? KEY_L : KEY_ZL;
-    CUSTOM_KEY_ZR = swap_triggers_and_shoulders ? KEY_R : KEY_ZR;
 
     aptSetHomeAllowed(false);
     touch_handler = std::make_unique<N3dsTouchscreenInput>(
@@ -116,29 +105,36 @@ void N3dsInput::_remove_gamepad() {
                                0, 0, 0, 0);
 }
 
-static inline int n3ds_to_li_button(u32 key_in, u32 key_n3ds, int key_li) {
-    return (key_in & key_n3ds) ? key_li : 0;
-}
+// The remappable 3DS buttons, indexed by PAD_SOURCE
+static const u32 SOURCE_KEYS[PAD_SOURCE_COUNT] = {
+    KEY_A, KEY_B,  KEY_X,  KEY_Y,     KEY_L,
+    KEY_R, KEY_ZL, KEY_ZR, KEY_START, KEY_SELECT};
 
-int N3dsInput::_n3ds_to_li_buttons(u32 key_n3ds) {
-    int li_out = 0;
-    li_out |= n3ds_to_li_button(key_n3ds, CUSTOM_KEY_A, A_FLAG);
-    li_out |= n3ds_to_li_button(key_n3ds, CUSTOM_KEY_B, B_FLAG);
-    li_out |= n3ds_to_li_button(key_n3ds, KEY_SELECT, BACK_FLAG);
-    li_out |= n3ds_to_li_button(key_n3ds, KEY_START, PLAY_FLAG);
-    li_out |= n3ds_to_li_button(key_n3ds, KEY_DRIGHT, RIGHT_FLAG);
-    li_out |= n3ds_to_li_button(key_n3ds, KEY_DLEFT, LEFT_FLAG);
-    li_out |= n3ds_to_li_button(key_n3ds, KEY_DUP, UP_FLAG);
-    li_out |= n3ds_to_li_button(key_n3ds, KEY_DDOWN, DOWN_FLAG);
-    li_out |= n3ds_to_li_button(key_n3ds, CUSTOM_KEY_R, RB_FLAG);
-    li_out |= n3ds_to_li_button(key_n3ds, CUSTOM_KEY_L, LB_FLAG);
-    li_out |= n3ds_to_li_button(key_n3ds, CUSTOM_KEY_X, X_FLAG);
-    li_out |= n3ds_to_li_button(key_n3ds, CUSTOM_KEY_Y, Y_FLAG);
-    return li_out;
-}
-
-static inline uint8_t n3ds_to_li_trigger(u32 key_in, u32 key_n3ds) {
-    return (key_in & key_n3ds) ? 255UL : 0UL;
+void N3dsInput::_read_buttons(u32 held) {
+    int buttons = 0;
+    uint8_t lt = 0, rt = 0;
+    for (int s = 0; s < PAD_SOURCE_COUNT; s++) {
+        if (held & SOURCE_KEYS[s]) {
+            ButtonMapping::apply_target(ButtonMapping::active_button_target(s),
+                                        buttons, lt, rt);
+        }
+    }
+    // The D-pad is not remappable
+    if (held & KEY_DUP)
+        buttons |= UP_FLAG;
+    if (held & KEY_DDOWN)
+        buttons |= DOWN_FLAG;
+    if (held & KEY_DLEFT)
+        buttons |= LEFT_FLAG;
+    if (held & KEY_DRIGHT)
+        buttons |= RIGHT_FLAG;
+    // Plus whatever the bottom-screen gamepad view is pressing
+    buttons |= gamepad_state.touch_buttons;
+    lt |= gamepad_state.touch_left_trigger;
+    rt |= gamepad_state.touch_right_trigger;
+    gamepad_state.buttons = buttons;
+    gamepad_state.leftTrigger = lt;
+    gamepad_state.rightTrigger = rt;
 }
 
 static inline int scale_n3ds_axis(int axis_n3ds, int axis_max) {
@@ -195,16 +191,8 @@ void N3dsInput::n3dsinput_handle_event() {
 
     touch_handler->n3dsinput_handle_touch(kDown, kUp);
 
-    if (kDown & ~KEY_TOUCH) {
-        gamepad_state.buttons |= _n3ds_to_li_buttons(kDown);
-        gamepad_state.leftTrigger |= n3ds_to_li_trigger(kDown, CUSTOM_KEY_ZL);
-        gamepad_state.rightTrigger |= n3ds_to_li_trigger(kDown, CUSTOM_KEY_ZR);
-    }
-    if (kUp & ~KEY_TOUCH) {
-        gamepad_state.buttons &= ~_n3ds_to_li_buttons(kUp);
-        gamepad_state.leftTrigger &= ~n3ds_to_li_trigger(kUp, CUSTOM_KEY_ZL);
-        gamepad_state.rightTrigger &= ~n3ds_to_li_trigger(kUp, CUSTOM_KEY_ZR);
-    }
+    // Rebuilt from the held buttons every frame through the button mapping
+    _read_buttons(hidKeysHeld());
 
     // HOME opens the stream menu; HOME again from the menu ends the stream
     // and the launcher then jumps to the HOME Menu (jumping while the

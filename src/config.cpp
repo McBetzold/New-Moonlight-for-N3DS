@@ -19,6 +19,7 @@
 
 #include "config.hpp"
 #include "audio/audio.h"
+#include "input/button_mapping.hpp"
 #include "system/pair_record.hpp"
 #include "util.h"
 
@@ -61,6 +62,8 @@ static struct option long_options[] = {
     {"auto_reconnect", required_argument, NULL, 'I'},
     {"resume_on_start", required_argument, NULL, 'J'},
     {"cstick_mouse", required_argument, NULL, 'K'},
+    {"button_map", required_argument, NULL, 'L'},
+    {"touch_map", required_argument, NULL, 'M'},
     {0, 0, 0, 0},
 };
 
@@ -182,6 +185,13 @@ void parse_argument(int c, char *value, PCONFIGURATION config) {
     case 'K':
         config->cstick_mouse = ((value != NULL) && (strcmp(value, "true") == 0));
         break;
+    case 'L':
+        ButtonMapping::parse_button_map(config, value);
+        config->button_map_from_file = true;
+        break;
+    case 'M':
+        ButtonMapping::parse_touch_map(config, value);
+        break;
     case 1:
         if (config->action == NULL)
             config->action = value;
@@ -237,9 +247,12 @@ void config_save(char *filename, PCONFIGURATION config) {
     write_config_bool(fd, "quitappafter", config->quitappafter);
     write_config_bool(fd, "viewonly", config->viewonly);
     write_config_int(fd, "video_decoder", config->video_decoder);
-    write_config_bool(fd, "swapfacebuttons", config->swap_face_buttons);
-    write_config_bool(fd, "swaptriggersandshoulders",
-                      config->swap_triggers_and_shoulders);
+    // The old swapfacebuttons / swaptriggersandshoulders options are read
+    // once and converted into button_map
+    write_config_string(fd, "button_map",
+                        ButtonMapping::format_button_map(config).c_str());
+    write_config_string(fd, "touch_map",
+                        ButtonMapping::format_touch_map(config).c_str());
     write_config_bool(fd, "usetriggersformouse",
                       config->use_triggers_for_mouse);
     write_config_bool(fd, "motion_controls", config->motion_controls);
@@ -298,8 +311,16 @@ void config_parse(int argc, char *argv[], PCONFIGURATION config) {
     config->auto_reconnect = true;
     config->resume_on_start = false;
     config->cstick_mouse = true;
+    ButtonMapping::set_defaults(config);
+    config->button_map_from_file = false;
 
     config_file_parse(config);
+
+    // Older moonlight.conf files only have the two swap options
+    if (!config->button_map_from_file) {
+        ButtonMapping::apply_legacy_swaps(config, config->swap_face_buttons,
+                                          config->swap_triggers_and_shoulders);
+    }
 
     if (config->stream.bitrate == -1) {
         // This table prefers 16:10 resolutions because they are

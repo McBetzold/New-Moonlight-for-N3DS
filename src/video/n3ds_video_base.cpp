@@ -17,8 +17,8 @@
  * along with Moonlight; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "../input/button_mapping.hpp"
 #include "../system/dispatcher.hpp"
-#include "gamepad_bgr.h"
 #include "keyboard_bgr.h"
 #include "menu_bgr.h"
 #include "touchpad_bgr.h"
@@ -92,8 +92,9 @@ void VideoDecoderBase::_accept_touch_state_changed(N3dsTouchType ttype) {
         renderer = std::make_unique<N3dsRendererNormal>(
             surface_width, surface_height, image_width, image_height,
             pixel_size);
+        // Drawn at run time so the labels follow the touch mapping
         (static_cast<N3dsRendererNormal *>(renderer.get()))
-            ->set_bottom_screen(gamepad_bgr);
+            ->set_bottom_screen(ButtonMapping::gamepad_view_image());
         break;
     case (N3dsTouchType::MOUSEPAD):
         renderer = std::make_unique<N3dsRendererNormal>(

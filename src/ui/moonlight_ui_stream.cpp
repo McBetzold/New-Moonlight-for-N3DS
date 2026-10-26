@@ -214,10 +214,8 @@ StreamOutcome MoonlightUi::run_stream(const std::shared_ptr<HostEntry> &host,
 
     std::shared_ptr<N3dsInput> input_handler = nullptr;
     if (!cfg->viewonly) {
-        input_handler = std::make_shared<N3dsInput>(
-            cfg->stream.width, cfg->stream.height, cfg->swap_face_buttons,
-            cfg->swap_triggers_and_shoulders, cfg->use_triggers_for_mouse,
-            cfg->motion_controls, cfg->cstick_mouse);
+        input_handler = std::make_shared<N3dsInput>(cfg->stream.width,
+                                                    cfg->stream.height, *cfg);
     }
 
     AUDIO_RENDERER_CALLBACKS *audio_callbacks =

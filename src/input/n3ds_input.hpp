@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include "../config.hpp"
 #include "../system/AtomicVar.hpp"
 #include "../system/subscriber.hpp"
 #include "touch/N3dsTouchscreenInput.hpp"
@@ -26,9 +27,8 @@
 
 class N3dsInput : public ISubscriber {
   public:
-    N3dsInput(int image_width, int image_height, bool swap_face_buttons,
-              bool swap_triggers_and_shoulders, bool use_triggers_for_mouse_in,
-              bool motion_controls_in = false, bool cstick_mouse_in = true);
+    // Takes the button mapping, mouse and motion options from cfg
+    N3dsInput(int image_width, int image_height, const CONFIGURATION &cfg);
     ~N3dsInput();
     void accept(IMessage *msg) override;
     void n3dsinput_handle_event();
@@ -37,7 +37,8 @@ class N3dsInput : public ISubscriber {
   private:
     void _add_gamepad();
     void _remove_gamepad();
-    int _n3ds_to_li_buttons(u32 key_n3ds);
+    // Rebuilds buttons and triggers from the held keys via the mapping
+    void _read_buttons(u32 held);
     bool _gamepad_state_changed();
     bool _accelerometer_state_changed();
     bool _gyroscope_state_changed();
@@ -62,13 +63,4 @@ class N3dsInput : public ISubscriber {
     u64 start_held_since = 0;   // system ticks, 0 = not held
     bool start_hold_handled = false;
     float mouse_remainder_x = 0, mouse_remainder_y = 0;
-
-    uint32_t CUSTOM_KEY_A;
-    uint32_t CUSTOM_KEY_B;
-    uint32_t CUSTOM_KEY_X;
-    uint32_t CUSTOM_KEY_Y;
-    uint32_t CUSTOM_KEY_L;
-    uint32_t CUSTOM_KEY_R;
-    uint32_t CUSTOM_KEY_ZL;
-    uint32_t CUSTOM_KEY_ZR;
 };

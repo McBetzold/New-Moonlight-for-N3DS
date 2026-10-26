@@ -51,7 +51,18 @@ After modding your 3DS and installing the Moonlight CIA, open the Moonlight appl
 
 ### Settings
 
-Press `START` or tap the gear icon to open the settings page. It is grouped like the PC client (Basic, 3D Display, Audio, Host, Input, Advanced): left/right adjusts the highlighted value, `A` toggles it or opens a keyboard for an exact value, and `B` saves and goes back. The top screen explains what the highlighted setting does and warns about stream sizes the 3DS cannot display.
+Press `START` or tap the gear icon to open the settings page. It is grouped like the PC client (Basic, 3D Display, Audio, Host, Input, Button Mapping, Gamepad View, Advanced): left/right adjusts the highlighted value, `A` toggles it or opens a keyboard for an exact value, and `B` saves and goes back. The top screen explains what the highlighted setting does and warns about stream sizes the 3DS cannot display.
+
+### Button mapping
+
+The PC sees the 3DS as an Xbox-style controller. Under **Button Mapping** in the settings:
+
+- **Layout** picks a preset. *Standard* sends the button with the same name (A sends A, L sends LB, ZL sends LT). *Xbox positions* swaps A/B and X/Y so the buttons line up with an Xbox pad's layout. *Shoulders as triggers* makes L/R the triggers and ZL/ZR the bumpers. The last preset combines both. Changing any single button shows the layout as *Custom*.
+- **A, B, X, Y, L, R, ZL, ZR, START and SELECT** can each send any controller button: face buttons, bumpers, triggers, View, Menu, Guide, either stick click (or both at once), a D-pad direction, or nothing. The D-pad and both sticks are fixed.
+- **Gamepad View** assigns the four boxes of the bottom-screen gamepad view (three across the top, one wide box below). By default they send L3, L3 + R3, R3 and Guide. The view's picture is drawn from the mapping, so its labels always show what each box sends.
+- **Reset all mapping** restores the defaults.
+
+In `moonlight.conf` the mapping is two lines, for example `button_map = a=b,b=a,x=y,y=x,l=lb,r=rb,zl=lt,zr=rt,start=menu,select=view` and `touch_map = topleft=l3,topmiddle=l3r3,topright=r3,bottom=guide`. The target names are `a b x y lb rb lt rt view menu guide l3 r3 l3r3 up down left right none`. The older `swapfacebuttons` and `swaptriggersandshoulders` options are converted into a mapping the first time settings are saved.
 
 ## Configuration
 
