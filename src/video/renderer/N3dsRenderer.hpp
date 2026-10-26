@@ -71,6 +71,10 @@ class N3dsRendererBase {
     // view's status panel.
     static void note_frame(int frame_number, unsigned host_latency_01ms);
 
+    // Shows a mouse-pointer icon in the top screen's corner while the
+    // C-stick is acting as a mouse (set from the input thread)
+    static void set_mouse_indicator(bool on);
+
   protected:
     inline void log_perf_counters();
     // Small warning block in the top screen's corner while moonlight-common-c
@@ -105,6 +109,9 @@ class N3dsRendererBase {
     // second by log_perf_counters(); a torn read now and then is harmless.
     static volatile int last_frame_number;
     static volatile u32 frames_lost;
+    static volatile u64 last_frame_tick;
+    static volatile u64 last_trouble_tick; // last frame loss or stall
+    static volatile bool mouse_indicator;
     static volatile u32 host_latency_sum;
     static volatile u32 host_latency_max;
     static volatile u32 host_latency_count;

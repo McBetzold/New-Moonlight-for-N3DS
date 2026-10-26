@@ -716,13 +716,9 @@ void MoonlightUi::pcs_update(const Input &in) {
             }
         }
         if (in.pressed(KEY_A)) {
-            auto host = hosts_[sel_pc_];
-            if (host->status_known && !host->online &&
-                wol::valid_mac(host->mac)) {
-                wake_host(host);
-            } else {
-                connect_to(host);
-            }
+            // Wake-on-LAN is experimental, so it is only offered in the
+            // options menu rather than on A
+            connect_to(hosts_[sel_pc_]);
             return;
         }
         if (in.pressed(KEY_X)) {
@@ -825,8 +821,7 @@ void MoonlightUi::pcs_draw_top() {
     }
 
     std::string action = !h.status_known ? "Connect"
-                         : !h.online     ? (wol::valid_mac(h.mac) ? "Wake PC"
-                                                                  : "Retry")
+                         : !h.online     ? "Retry"
                          : !h.paired     ? "Pair"
                                          : "Connect";
     draw_hints({{"A", action},
@@ -1192,7 +1187,8 @@ void MoonlightUi::pc_options() {
         ACT_UNPAIR,
         ACT_RENAME,
         ACT_REFRESH,
-        ACT_DELETE
+        ACT_DELETE,
+        ACT_WOL_GUIDE
     };
     items.push_back("Connect");
     actions.push_back(ACT_CONNECT);
@@ -1202,7 +1198,7 @@ void MoonlightUi::pc_options() {
         actions.push_back(ACT_RESUME);
     }
     if (!(host->status_known && host->online) && wol::valid_mac(host->mac)) {
-        items.push_back("Wake PC");
+        items.push_back("Wake PC (experimental)");
         actions.push_back(ACT_WAKE);
     }
     if (host->status_known && host->online) {
@@ -1220,6 +1216,8 @@ void MoonlightUi::pc_options() {
     actions.push_back(ACT_REFRESH);
     items.push_back("Delete PC");
     actions.push_back(ACT_DELETE);
+    items.push_back("Wake-on-LAN setup guide");
+    actions.push_back(ACT_WOL_GUIDE);
 
     int choice = menu(host->display_name(), items);
     if (choice < 0) {
@@ -1234,6 +1232,9 @@ void MoonlightUi::pc_options() {
         break;
     case ACT_WAKE:
         wake_host(host);
+        break;
+    case ACT_WOL_GUIDE:
+        show_wol_guide();
         break;
     case ACT_PAIR:
         pair_host(host);
@@ -1444,6 +1445,14 @@ void MoonlightUi::wake_host(const std::shared_ptr<HostEntry> &host) {
                    "on, then Wake PC will be available.");
         return;
     }
+    // Untested on real hardware so far; say so up front
+    if (!confirm("Wake " + host->display_name() + "? (experimental)",
+                 "Wake-on-LAN is untested. It only works once it is enabled "
+                 "in the PC's BIOS and network adapter settings; see the "
+                 "Wake-on-LAN setup guide in this PC's options menu.",
+                 "Wake PC", "Cancel")) {
+        return;
+    }
     if (!wol::send(host->mac, host->address)) {
         show_error("Cannot wake " + host->display_name(),
                    "The wake-up packet could not be sent. Check the 3DS's "
@@ -1492,12 +1501,14 @@ void MoonlightUi::wake_host(const std::shared_ptr<HostEntry> &host) {
         toast(host->display_name() + " is awake");
         connect_to(host);
     } else if (timed_out) {
-        show_error("Still asleep",
-                   host->display_name() +
-                       " did not answer within 90 seconds. Make sure "
-                       "Wake-on-LAN is enabled in the PC's BIOS and network "
-                       "adapter settings, and that the PC is asleep rather "
-                       "than fully shut down.");
+        if (confirm("Still asleep",
+                    host->display_name() +
+                        " did not answer within 90 seconds. Wake-on-LAN "
+                        "has to be enabled in the PC's BIOS and network "
+                        "adapter settings first.",
+                    "Open setup guide", "Close")) {
+            show_wol_guide();
+        }
     }
 }
 

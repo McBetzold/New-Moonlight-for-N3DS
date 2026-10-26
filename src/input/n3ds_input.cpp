@@ -20,6 +20,7 @@
 #include "n3ds_input.hpp"
 #include "../system/apt_state.hpp"
 #include "../system/dispatcher.hpp"
+#include "../video/renderer/N3dsRenderer.hpp"
 #include "touch/TouchHandler.hpp"
 
 #include <3ds.h>
@@ -82,6 +83,7 @@ N3dsInput::~N3dsInput() {
     pDispatcher->unsubscribe(MessageType::ENABLE_GYRO, this);
 
     _remove_gamepad();
+    N3dsRendererBase::set_mouse_indicator(false);
     gamepad_state = GAMEPAD_STATE();
     previous_state = GAMEPAD_STATE();
     touch_handler = nullptr;
@@ -248,6 +250,7 @@ void N3dsInput::n3dsinput_handle_event() {
                        now - start_held_since > SYSCLOCK_ARM11) {
                 start_hold_handled = true;
                 cstick_mouse_active = !cstick_mouse_active;
+                N3dsRendererBase::set_mouse_indicator(cstick_mouse_active);
                 mouse_remainder_x = mouse_remainder_y = 0;
                 if (!cstick_mouse_active && !use_triggers_for_mouse) {
                     // Let go of any mouse button the triggers were holding

@@ -380,8 +380,8 @@ void MoonlightUi::settings_build() {
         r.type = SettingRow::Slider;
         r.label = "Volume boost";
         r.desc = "Makes the stream louder than the PC sends it; the 3DS "
-                 "speakers are quiet. Loud passages start to distort above "
-                 "about 200%. Press A for an exact value.";
+                 "speakers are quiet. Recommended: 200% or less. Above that, "
+                 "loud passages clip and distort.";
         r.value = [cfg] { return std::to_string(cfg->volume_boost) + "%"; };
         r.fraction = [cfg] { return (cfg->volume_boost - 100) / 300.0f; };
         r.set_fraction = [cfg](float f) {

@@ -96,6 +96,62 @@ void MoonlightUi::show_stereo_guide() {
                sizeof(STEREO_GUIDE) / sizeof(STEREO_GUIDE[0]));
 }
 
+// ---- Wake-on-LAN setup guide -------------------------------------------------
+
+static const GuidePage WOL_GUIDE[] = {
+    {"What Wake-on-LAN does",
+     "Wake PC (experimental) sends a \"magic packet\" over your network that "
+     "tells a sleeping PC to turn on, so you can start streaming without "
+     "getting up. It is untested in this version.\n"
+     "The PC has to be prepared for it once: in its BIOS, in Windows' "
+     "network adapter settings and in Windows' power options. The next "
+     "pages walk through each.\n"
+     "Moonlight learns the PC's network (MAC) address the first time it "
+     "connects while paired, so connect once with the PC on."},
+    {"1. Use a wired connection",
+     "* Connect the PC to the router with an Ethernet cable. Waking over "
+     "Wi-Fi is rarely supported.\n"
+     "* Keep the 3DS on the same network as the PC; magic packets do not "
+     "cross into other networks or the internet."},
+    {"2. Turn it on in the BIOS",
+     "Restart the PC and enter its BIOS/UEFI setup, usually with Delete, F2 "
+     "or F10 at power-on. The names vary by maker; look under Power, APM or "
+     "Advanced:\n"
+     "* Enable \"Wake on LAN\", \"Power On By PCI-E\" or \"Resume by PCI-E "
+     "Device\".\n"
+     "* Disable \"ErP\", \"EuP\" or \"Deep Sleep\", which cut power to the "
+     "network card when the PC is off.\n"
+     "Save and exit."},
+    {"3. Set up the network adapter",
+     "In Windows, open Device Manager, expand Network adapters and open "
+     "your Ethernet adapter's Properties.\n"
+     "* Power Management tab: tick \"Allow this device to wake the "
+     "computer\" and \"Only allow a magic packet to wake the computer\".\n"
+     "* Advanced tab: set \"Wake on Magic Packet\" to Enabled. If there is a "
+     "\"Shutdown Wake-On-Lan\" or similar entry, enable it too."},
+    {"4. Windows power options",
+     "* Waking from Sleep is the most reliable. Put the PC to sleep instead "
+     "of shutting it down.\n"
+     "* To wake from Shut down as well, turn off Fast Startup: Control "
+     "Panel, Power Options, \"Choose what the power buttons do\", "
+     "\"Change settings that are currently unavailable\", then untick "
+     "\"Turn on fast startup\".\n"
+     "* Hibernate support depends on the PC."},
+    {"5. Try it",
+     "* Put the PC to sleep and press Y on the Computers screen until it "
+     "shows Offline.\n"
+     "* Press X on the PC and choose Wake PC (experimental). Moonlight "
+     "resends the packet every 10 seconds and connects as soon as the PC "
+     "answers, for up to 90 seconds.\n"
+     "* If it never wakes, check the BIOS and adapter settings again; some "
+     "PCs only wake from Sleep."},
+};
+
+void MoonlightUi::show_wol_guide() {
+    show_guide("Wake-on-LAN setup", WOL_GUIDE,
+               sizeof(WOL_GUIDE) / sizeof(WOL_GUIDE[0]));
+}
+
 // ---- Guide reader ----------------------------------------------------------
 
 static const float TOOLBAR_H = 36.0f;

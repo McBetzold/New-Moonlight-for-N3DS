@@ -31,17 +31,23 @@ After modding your 3DS and installing the Moonlight CIA, open the Moonlight appl
 - NOTE: The Stretch view shows the upper half of the stream on the top screen and the lower half on the bottom screen at the same scale; because the bottom screen is narrower, it shows the central 80% of the lower half rather than squeezing it. Use the 800x480 preset for it.
 - NOTE: When the Magnify view is active, you can lock the region you are magnifying by holding either of the shoulder buttons (L or R).
     - When the view is locked, you can use the touchscreen to click, drag, and release items in the selected region of the screen (similar to the Mirror and Stretch views)
+- The in-stream menu is grouped by purpose. Top row: on-screen controls (`GAMEPAD`, `KEYBOARD`, `MOUSE` touchpad). Second row: the stream on the touch screen, with taps sent as mouse clicks (`MIRROR`) or as real touch (`TOUCH`). Third row: the other views (`STRETCH`, `MAGNIFY`). Bottom row: `EXIT`, `COMMANDS` and `DEBUG`.
 - NOTE: The Touch view is the Mirror view with real touch input: Sunshine and Apollo receive the stylus as a touch screen, so Windows shows touch feedback and apps that distinguish touch from mouse behave accordingly. On hosts without touch support it falls back to mouse clicks.
 - NOTE: The Commands view lists the server commands of an Apollo host (see *Apollo hosts* below).
-- Holding `START` for about a second turns the C-stick into a mouse pointer with `ZL`/`ZR` as its buttons; hold `START` again to get the right stick back. This can be turned off under Input Settings.
-- A small yellow square in the top-right corner of the top screen means moonlight-common-c is seeing heavy packet loss; move closer to the router before the stream drops. If it drops anyway, Moonlight reconnects by itself up to three times (Host Settings, *Reconnect automatically*).
+- Holding `START` for about a second turns the C-stick into a mouse pointer with `ZL`/`ZR` as its buttons; a pointer icon appears in the top-left corner of the top screen while it is on. Hold `START` again to get the right stick back. This can be turned off under Input Settings.
+- A yellow warning sign in the top-right corner of the top screen means frames are being lost or delayed on the network; move closer to the router before the stream drops. If it drops anyway, Moonlight reconnects by itself up to three times (Host Settings, *Reconnect automatically*).
 
 ### Waking and resuming
 
-- **Wake PC.** Once Moonlight has connected to a paired PC, it remembers the PC's network address. When that PC later shows as offline, `A` (or *Wake PC* in its options menu) sends Wake-on-LAN packets and waits up to 90 seconds for it to answer. Wake-on-LAN has to be enabled in the PC's BIOS and network adapter settings, and the PC must be asleep rather than shut down.
+- **Wake PC (experimental, untested).** Once Moonlight has connected to a paired PC, it remembers the PC's network address. When that PC later shows as offline, *Wake PC (experimental)* in its options menu (`X`) sends Wake-on-LAN packets and waits up to 90 seconds for it to answer. The PC must be set up for it first; the *Wake-on-LAN setup guide* in the same menu walks through it, and in short:
+    1. Connect the PC to the router with an Ethernet cable; waking over Wi-Fi is rarely supported.
+    2. In the BIOS/UEFI (Delete, F2 or F10 at power-on), enable *Wake on LAN*, *Power On By PCI-E* or *Resume by PCI-E Device*, and disable *ErP*/*EuP*/*Deep Sleep*.
+    3. In Windows Device Manager, open the Ethernet adapter's properties. On *Power Management*, tick *Allow this device to wake the computer* and *Only allow a magic packet to wake the computer*; on *Advanced*, set *Wake on Magic Packet* to Enabled.
+    4. Put the PC to sleep rather than shutting it down. To wake from shutdown as well, turn off Fast Startup (Control Panel → Power Options → *Choose what the power buttons do*).
 - **Resume running app.** A PC with an app still running offers *Resume running app* in its options menu, which opens the app list and resumes that app in one step.
 - **Resume on start** (Host Settings) does the same automatically when Moonlight opens: after the first status check, a three-second countdown resumes the running app unless you choose to stay in the launcher.
-- **Volume boost** (Audio Settings) makes the stream louder than the PC sends it, up to 400%. The 3DS speakers are quiet; loud passages distort above about 200%.
+- **Volume boost** (Audio Settings) makes the stream louder than the PC sends it, up to 400%. The 3DS speakers are quiet; **keep it at 200% or below**, since higher settings clip loud passages and distort.
+- **Remote Input** (Apollo's input-only mode) shows a status panel on the top screen while connected: the PC's name, a running session timer with a blinking light, and the controls. No picture or sound is streamed in this mode.
 
 ### Settings
 
