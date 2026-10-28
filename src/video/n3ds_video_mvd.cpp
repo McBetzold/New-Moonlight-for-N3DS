@@ -278,8 +278,17 @@ int MvdDecoder::submit_decode_unit(PDECODE_UNIT decodeUnit) {
     PLENTRY entry = decodeUnit->bufferList;
     int length = 0;
 
+    // Frames up to and including the IDR requested at stream start are not
+    // counted as trouble: common-c drops frames until it arrives, which
+    // would otherwise flash the poor-connection icon at every start
+    bool is_idr = decodeUnit->frameType == FRAME_TYPE_IDR;
     N3dsRendererBase::note_frame(decodeUnit->frameNumber,
-                                 decodeUnit->frameHostProcessingLatency);
+                                 decodeUnit->frameHostProcessingLatency,
+                                 !first_frame && !startup_idr_pending);
+    if (startup_idr_pending &&
+        ((is_idr && !first_frame) || ++startup_frames > 120)) {
+        startup_idr_pending = false;
+    }
 
     // Blocks only if the decoder has fallen MVD_FRAME_QUEUE_DEPTH frames
     // behind, which is the same back-pressure the old synchronous path applied
@@ -307,14 +316,15 @@ int MvdDecoder::submit_decode_unit(PDECODE_UNIT decodeUnit) {
     write_idx = (write_idx + 1) % MVD_FRAME_QUEUE_DEPTH;
     LightSemaphore_Release(&filled_slots, 1);
 
-    // If MVD never gets an IDR frame, everything shows up gray. The host
-    // normally starts with one; asking for another anyway makes the client
-    // drop frames until it arrives, which flashed the poor-connection icon.
+    // If MVD never gets an IDR frame, everything shows up gray. Always ask
+    // for a second one at stream start, even when the first frame already
+    // is an IDR: MVD does not build its first picture from the stream's
+    // opening IDR, and skipping this request (b27379a) left a washed-out
+    // picture that only repaired where the screen changed.
     if (first_frame) {
         first_frame = false;
-        if (decodeUnit->frameType != FRAME_TYPE_IDR) {
-            return DR_NEED_IDR;
-        }
+        startup_idr_pending = true;
+        return DR_NEED_IDR;
     }
     return DR_OK;
 }
