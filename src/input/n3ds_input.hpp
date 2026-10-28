@@ -53,9 +53,8 @@ class N3dsInput : public ISubscriber {
     std::unique_ptr<N3dsTouchscreenInput> touch_handler = nullptr;
 
     float gyro_coeff = 0;
-    // Note: This was found experimentally and may need a calibration option in
-    // settings
-    float accel_coeff = 52.0;
+    // m/s^2 per raw accelerometer unit: the 3DS reports 512 per g
+    float accel_coeff = 9.80665f / 512.0f;
     AtomicVar<bool> enable_gyro = false;
     AtomicVar<bool> enable_accel = false;
     bool use_triggers_for_mouse = false;

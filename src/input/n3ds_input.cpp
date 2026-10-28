@@ -345,9 +345,16 @@ void N3dsInput::n3dsinput_handle_event() {
     if (enable_accel.load()) {
         accelVector accel_vector;
         hidAccelRead(&accel_vector);
-        gamepad_state.accel_vector_x = trunc(accel_vector.x / accel_coeff);
-        gamepad_state.accel_vector_y = trunc(accel_vector.y / accel_coeff);
-        gamepad_state.accel_vector_z = trunc(accel_vector.z / accel_coeff);
+        // Moonlight uses SDL's controller axes (m/s^2): +X right, +Y up out
+        // of the controller's face, +Z toward the player, so a pad at rest
+        // reads +9.8 on Y. The 3DS reports 512 per g with Y pointing the
+        // other way (the same mapping Citra/Azahar use in reverse). Sending
+        // Y unflipped told the host the 3DS was upside down, which turned
+        // tilt-aiming up/down backwards in games that fuse gravity. Keep
+        // the fractions: whole m/s^2 is about 6 degrees of tilt per step.
+        gamepad_state.accel_vector_x = accel_vector.x * accel_coeff;
+        gamepad_state.accel_vector_y = -accel_vector.y * accel_coeff;
+        gamepad_state.accel_vector_z = accel_vector.z * accel_coeff;
         if (_accelerometer_state_changed()) {
             LiSendControllerMotionEvent(CONTROLLER_NUMBER, LI_MOTION_TYPE_ACCEL,
                                         gamepad_state.accel_vector_x,
@@ -359,9 +366,12 @@ void N3dsInput::n3dsinput_handle_event() {
     if (enable_gyro.load()) {
         angularRate gyro_rate;
         hidGyroRead(&gyro_rate);
-        gamepad_state.gyro_rate_x = trunc(-1 * gyro_rate.x / gyro_coeff);
-        gamepad_state.gyro_rate_y = trunc(gyro_rate.y / gyro_coeff);
-        gamepad_state.gyro_rate_z = trunc(-1 * gyro_rate.z / gyro_coeff);
+        // Degrees per second in SDL's axes; X and Z are mirrored on the
+        // 3DS. Fractions are kept: slow aiming moves well under 1 deg/s,
+        // which whole numbers dropped entirely.
+        gamepad_state.gyro_rate_x = -gyro_rate.x / gyro_coeff;
+        gamepad_state.gyro_rate_y = gyro_rate.y / gyro_coeff;
+        gamepad_state.gyro_rate_z = -gyro_rate.z / gyro_coeff;
         if (_gyroscope_state_changed()) {
             LiSendControllerMotionEvent(CONTROLLER_NUMBER, LI_MOTION_TYPE_GYRO,
                                         gamepad_state.gyro_rate_x,
