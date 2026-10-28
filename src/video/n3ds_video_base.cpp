@@ -76,6 +76,7 @@ void VideoDecoderBase::accept(IMessage *msg) {
 
 void VideoDecoderBase::_accept_touch_state_changed(N3dsTouchType ttype) {
     renderer_lock.lock();
+    keyboard_view = (ttype == N3dsTouchType::KEYBOARD);
     switch (ttype) {
     case (N3dsTouchType::DEBUG_TOUCH):
         renderer = std::make_unique<N3dsRendererNormal>(
@@ -143,8 +144,13 @@ void VideoDecoderBase::_accept_touch_state_changed(N3dsTouchType ttype) {
 void VideoDecoderBase::_accept_keyboard_state_changed(
     KeyboardStateChangedMsg *msg) {
     renderer_lock.lock();
-    (static_cast<N3dsRendererNormal *>(renderer.get()))
-        ->set_bottom_screen(msg->keyboard_image, msg->key_offset,
-                            msg->key_size);
+    // Only the Keyboard view's renderer is an N3dsRendererNormal showing the
+    // keyboard; a late message after a view switch or EXIT_STREAM (Mock
+    // renderer) must not be cast and drawn into the wrong object
+    if (keyboard_view && renderer) {
+        (static_cast<N3dsRendererNormal *>(renderer.get()))
+            ->set_bottom_screen(msg->keyboard_image, msg->key_offset,
+                                msg->key_size);
+    }
     renderer_lock.unlock();
 }

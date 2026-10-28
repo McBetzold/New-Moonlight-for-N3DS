@@ -58,6 +58,8 @@ class VideoDecoderBase : public ISubscriber {
   protected:
     int image_width, image_height, surface_width, surface_height, pixel_size;
     std::unique_ptr<IN3dsRenderer> renderer = nullptr;
+    // The current renderer is the Keyboard view's (set under renderer_lock)
+    bool keyboard_view = false;
     ThreadLock renderer_lock;
 };
 

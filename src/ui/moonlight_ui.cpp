@@ -581,13 +581,18 @@ int MoonlightUi::menu(const std::string &title,
     return r;
 }
 
-bool MoonlightUi::wait_job(const std::shared_ptr<Worker::Job> &job, Modal &m) {
+bool MoonlightUi::wait_job(const std::shared_ptr<Worker::Job> &job, Modal &m,
+                           const std::function<void()> &on_close) {
     m.busy = true;
     int r = show_modal(m, [&job] { return job->is_done(); });
     if (r == -3) {
         // App is closing: still let the job finish so libgamestream state is
         // consistent before teardown. Abort a pairing wait for the PIN
-        // (ignored by any other request) so closing does not hang.
+        // (ignored by any other request) so closing does not hang; on_close
+        // also covers a pairing job that has not started yet.
+        if (on_close && !job->is_done()) {
+            on_close();
+        }
         http_cancel();
         while (!job->is_done()) {
             svcSleepThread(5 * 1000 * 1000);
@@ -1438,7 +1443,9 @@ void MoonlightUi::pair_host(const std::shared_ptr<HostEntry> &host,
         m.busy_text = "Waiting for the PIN to be entered on the PC";
     }
     m.buttons = {"Cancel"};
-    if (!wait_job(job, m)) {
+    // Closing the app while the job is still queued must cancel it too
+    auto cancel_on_close = [cancelled] { cancelled->store(true); };
+    if (!wait_job(job, m, cancel_on_close)) {
         if (!job->is_done()) {
             // Cancel (or B): abort the request and wait for the worker to
             // let go, which takes at most about a second
@@ -1446,7 +1453,7 @@ void MoonlightUi::pair_host(const std::shared_ptr<HostEntry> &host,
             http_cancel();
             Modal c;
             c.title = "Cancelling pairing";
-            wait_job(job, c);
+            wait_job(job, c, cancel_on_close);
             if (*status != GS_OK) {
                 toast("Pairing cancelled");
                 return;

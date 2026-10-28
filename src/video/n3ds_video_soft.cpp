@@ -153,6 +153,11 @@ int SoftVideoDecoder::submit_decode_unit(PDECODE_UNIT decodeUnit) {
     ffmpeg_decode((unsigned char *)ffmpeg_buffer, length);
 
     AVFrame *frame = ffmpeg_get_frame(false);
+    if (frame == NULL) {
+        // No frame this time (the decoder needs more data or rejected the
+        // packet); skip drawing instead of dereferencing NULL
+        return DR_OK;
+    }
     int status = _write_yuv_to_framebuffer(
         (const u8 **)frame->data, image_width, image_height, pixel_size);
 
