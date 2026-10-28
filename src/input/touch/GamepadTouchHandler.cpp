@@ -22,9 +22,10 @@
 #include <Limelight.h>
 #include <cstring>
 
-// Four zones, matching the boxes drawn by ButtonMapping::gamepad_view_image():
-// three across the top half and one filling the bottom half. Each sends
-// whatever the touch mapping assigns to it (default L3, L3+R3, R3, Guide).
+// Five zones, matching the boxes drawn by ButtonMapping::gamepad_view_image():
+// three across the top half and two side by side in the bottom half. Each
+// sends whatever the touch mapping assigns to it (default L3, L3+R3, R3,
+// HOME, Capture).
 
 GamepadTouchHandler::GamepadTouchHandler(GAMEPAD_STATE *gamepad_in)
     : gamepad_state(gamepad_in) {}
@@ -40,7 +41,7 @@ void GamepadTouchHandler::release() {
 void GamepadTouchHandler::press_zone_at(touchPosition touch) {
     int zone;
     if (touch.py >= 120) {
-        zone = ZONE_BOTTOM;
+        zone = touch.px < 160 ? ZONE_BOTTOM_LEFT : ZONE_BOTTOM_RIGHT;
     } else if (touch.px < 104) {
         zone = ZONE_TOP_LEFT;
     } else if (touch.px < 215) {

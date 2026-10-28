@@ -28,6 +28,24 @@ static CURL *curl;
 static uint32_t connection_timeout_s = 60;
 static uint32_t connect_timeout_s = 10;
 static int log_level = 0;
+static volatile bool cancellable = false;
+static volatile bool cancel_requested = false;
+
+// libcurl calls this about once a second even while waiting for the host,
+// so a cancel takes effect within a second
+static int _progress_curl(void *clientp, curl_off_t dltotal, curl_off_t dlnow,
+                          curl_off_t ultotal, curl_off_t ulnow) {
+    return (cancellable && cancel_requested) ? 1 : 0;
+}
+
+void http_begin_cancellable(void) {
+    cancel_requested = false;
+    cancellable = true;
+}
+
+void http_end_cancellable(void) { cancellable = false; }
+
+void http_cancel(void) { cancel_requested = true; }
 
 static size_t _write_curl(void *contents, size_t size, size_t nmemb,
                           void *userp) {
@@ -72,6 +90,8 @@ int http_init(const char *keyDirectory, int logLevel) {
     curl_easy_setopt(curl, CURLOPT_SSL_SESSIONID_CACHE, 0L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, connection_timeout_s);
     curl_easy_setopt(curl, CURLOPT_VERBOSE, log_level > 0 ? 1L : 0);
+    curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, _progress_curl);
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 
     return GS_OK;
 }
@@ -111,7 +131,8 @@ int http_request(char *url, PHTTP_DATA data) {
     CURLcode res = curl_easy_perform(curl);
 
     if (res != CURLE_OK) {
-        gs_error = curl_easy_strerror(res);
+        gs_error = res == CURLE_ABORTED_BY_CALLBACK ? "Cancelled"
+                                                    : curl_easy_strerror(res);
         return GS_FAILED;
     } else if (data->memory == NULL) {
         return GS_OUT_OF_MEMORY;

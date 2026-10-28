@@ -952,6 +952,11 @@ void MoonlightUi::apply_probe(PendingProbe &probe) {
         h.current_game = r.current_game;
         h.running_uuid = r.running_uuid;
         resolve_running_app(h);
+        // Worker jobs for this host (box art, pairing, launch) may be reading
+        // h.server right now. The copy is harmless only because the strings
+        // and mode list of the old copy are never freed: they hold the same
+        // values and stay valid. Do NOT free the old strings here to fix that
+        // small leak; it would turn into a use-after-free on the worker.
         h.server = r.server;
         h.server_valid = true;
         h.server_desc = r.desc;
@@ -1388,8 +1393,11 @@ void MoonlightUi::pair_host(const std::shared_ptr<HostEntry> &host,
         http_set_timeout_s(3 * 60);
         http_set_connect_timeout_s(10);
         std::string pin_copy = pin;
+        // The dialog's Cancel button aborts the wait for the PIN
+        http_begin_cancellable();
         *status = gs_pair(&host->server, &pin_copy[0],
                           passphrase.empty() ? nullptr : passphrase.c_str());
+        http_end_cancellable();
         http_set_timeout_s(60);
         if (*status != GS_OK) {
             *error = gs_error ? gs_error : "Pairing failed";
@@ -1412,8 +1420,23 @@ void MoonlightUi::pair_host(const std::shared_ptr<HostEntry> &host,
         m.big_text = pin;
         m.busy_text = "Waiting for the PIN to be entered on the PC";
     }
+    m.buttons = {"Cancel"};
     if (!wait_job(job, m)) {
-        return;
+        if (!job->is_done()) {
+            // Cancel (or B): abort the request and wait for the worker to
+            // let go, which takes at most about a second
+            http_cancel();
+            Modal c;
+            c.title = "Cancelling pairing";
+            wait_job(job, c);
+            if (*status != GS_OK) {
+                toast("Pairing cancelled");
+                return;
+            }
+            // Pairing finished just before the cancel landed; keep it
+        } else {
+            return;
+        }
     }
 
     if (*status == GS_OK) {
