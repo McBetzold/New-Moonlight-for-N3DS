@@ -47,7 +47,7 @@ static const TargetInfo TARGETS[PAD_TARGET_COUNT] = {
     {"rt", "RT (right trigger)", "RT"},
     {"view", "View / Back", "VIEW"},
     {"menu", "Menu / Start", "MENU"},
-    {"guide", "Guide (Xbox button)", "GUIDE"},
+    {"guide", "HOME (Xbox Guide button)", "HOME"},
     {"l3", "L3 (left stick click)", "L3"},
     {"r3", "R3 (right stick click)", "R3"},
     {"l3r3", "L3 + R3 together", "L3+R3"},
@@ -55,6 +55,7 @@ static const TargetInfo TARGETS[PAD_TARGET_COUNT] = {
     {"down", "D-pad down", "DOWN"},
     {"left", "D-pad left", "LEFT"},
     {"right", "D-pad right", "RIGHT"},
+    {"capture", "Capture (View + Menu together)", "CAPTURE"},
 };
 
 static const char *SOURCE_TOKENS[PAD_SOURCE_COUNT] = {
@@ -63,11 +64,12 @@ static const char *SOURCE_LABELS[PAD_SOURCE_COUNT] = {
     "A button", "B button", "X button", "Y button",     "L button",
     "R button", "ZL button", "ZR button", "START button", "SELECT button"};
 
-static const char *ZONE_TOKENS[TOUCH_ZONE_COUNT] = {"topleft", "topmiddle",
-                                                    "topright", "bottom"};
+static const char *ZONE_TOKENS[TOUCH_ZONE_COUNT] = {
+    "topleft", "topmiddle", "topright", "bottomleft", "bottomright"};
 static const char *ZONE_LABELS[TOUCH_ZONE_COUNT] = {
     "Gamepad view: top left", "Gamepad view: top middle",
-    "Gamepad view: top right", "Gamepad view: bottom"};
+    "Gamepad view: top right", "Gamepad view: bottom left",
+    "Gamepad view: bottom right"};
 
 static int clamp_target(int t) {
     return (t >= 0 && t < PAD_TARGET_COUNT) ? t : PAD_NONE;
@@ -89,7 +91,7 @@ static const unsigned char DEFAULT_BUTTONS[PAD_SOURCE_COUNT] = {
     PAD_A,  PAD_B,  PAD_X,  PAD_Y,    PAD_LB,
     PAD_RB, PAD_LT, PAD_RT, PAD_MENU, PAD_VIEW};
 static const unsigned char DEFAULT_TOUCH[TOUCH_ZONE_COUNT] = {
-    PAD_L3, PAD_L3R3, PAD_R3, PAD_GUIDE};
+    PAD_L3, PAD_L3R3, PAD_R3, PAD_GUIDE, PAD_CAPTURE};
 
 static void preset_buttons(int preset, unsigned char out[PAD_SOURCE_COUNT]) {
     memcpy(out, DEFAULT_BUTTONS, PAD_SOURCE_COUNT);
@@ -168,9 +170,11 @@ static int find_target(const std::string &token) {
     return -1;
 }
 
-// Parses "key=value,key=value" with keys from `keys`
+// Parses "key=value,key=value" with keys from `keys`; `alias`, if given, is
+// an old key name that sets out[alias_index]
 static void parse_pairs(const char *value, const char *const *keys,
-                        int key_count, unsigned char *out) {
+                        int key_count, unsigned char *out,
+                        const char *alias = nullptr, int alias_index = 0) {
     if (value == NULL) {
         return;
     }
@@ -204,6 +208,9 @@ static void parse_pairs(const char *value, const char *const *keys,
                 out[k] = (unsigned char)target;
             }
         }
+        if (alias != nullptr && key == alias) {
+            out[alias_index] = (unsigned char)target;
+        }
     }
 }
 
@@ -212,7 +219,9 @@ void parse_button_map(PCONFIGURATION cfg, const char *value) {
 }
 
 void parse_touch_map(PCONFIGURATION cfg, const char *value) {
-    parse_pairs(value, ZONE_TOKENS, TOUCH_ZONE_COUNT, cfg->touch_map);
+    // Older files have one wide "bottom" box; it is now the bottom-left box
+    parse_pairs(value, ZONE_TOKENS, TOUCH_ZONE_COUNT, cfg->touch_map,
+                "bottom", ZONE_BOTTOM_LEFT);
 }
 
 static std::string format_pairs(const char *const *keys, int count,
@@ -286,6 +295,7 @@ void apply_target(int target, int &buttons, uint8_t &lt, uint8_t &rt) {
     case PAD_DOWN: buttons |= DOWN_FLAG; break;
     case PAD_LEFT: buttons |= LEFT_FLAG; break;
     case PAD_RIGHT: buttons |= RIGHT_FLAG; break;
+    case PAD_CAPTURE: buttons |= BACK_FLAG | PLAY_FLAG; break;
     default: break;
     }
 }
@@ -300,6 +310,7 @@ struct Glyph {
 static const Glyph FONT[] = {
     {'A', {".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"}},
     {'B', {"####.", "#...#", "#...#", "####.", "#...#", "#...#", "####."}},
+    {'C', {".###.", "#...#", "#....", "#....", "#....", "#...#", ".###."}},
     {'D', {"####.", "#...#", "#...#", "#...#", "#...#", "#...#", "####."}},
     {'E', {"#####", "#....", "#....", "####.", "#....", "#....", "#####"}},
     {'F', {"#####", "#....", "#....", "####.", "#....", "#....", "#...."}},
@@ -385,7 +396,8 @@ const uint8_t *gamepad_view_image() {
     } boxes[TOUCH_ZONE_COUNT] = {{10, 10, 88, 100, ZONE_TOP_LEFT},
                                  {108, 10, 102, 100, ZONE_TOP_MIDDLE},
                                  {220, 10, 90, 100, ZONE_TOP_RIGHT},
-                                 {10, 130, 300, 100, ZONE_BOTTOM}};
+                                 {10, 130, 145, 100, ZONE_BOTTOM_LEFT},
+                                 {165, 130, 145, 100, ZONE_BOTTOM_RIGHT}};
     for (const auto &b : boxes) {
         int t = s_touch[b.zone];
         fill(b.x, b.y, b.w, b.h, t == PAD_NONE ? EMPTY : BLACK);

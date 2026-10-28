@@ -42,6 +42,12 @@ void http_set_timeout_s(uint32_t connection_timeout_in);
 /* Limits only the TCP connect phase; keeps probes of offline hosts short. */
 void http_set_connect_timeout_s(uint32_t connect_timeout_in);
 void http_set_log_level(int log_level_in);
+// Requests made between begin and end can be aborted with http_cancel()
+// from another thread (the pairing dialog's Cancel button). A cancel
+// outside that window is ignored.
+void http_begin_cancellable(void);
+void http_end_cancellable(void);
+void http_cancel(void);
 
 #ifdef __cplusplus
 }

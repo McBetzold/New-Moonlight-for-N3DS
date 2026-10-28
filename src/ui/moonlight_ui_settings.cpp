@@ -519,9 +519,14 @@ void MoonlightUi::settings_build() {
         "screen.",
         "The middle box across the top of the gamepad view.",
         "The right box across the top of the gamepad view.",
-        "The wide box across the bottom half of the gamepad view."};
+        "The left box in the bottom half of the gamepad view (HOME by "
+        "default).",
+        "The right box in the bottom half of the gamepad view. Capture by "
+        "default: it presses View and Menu together, which SwitchBridge "
+        "turns into the Switch's Capture button."};
     static const char *zone_names[TOUCH_ZONE_COUNT] = {
-        "Top left box", "Top middle box", "Top right box", "Bottom box"};
+        "Top left box", "Top middle box", "Top right box", "Bottom left box",
+        "Bottom right box"};
     for (int z = 0; z < TOUCH_ZONE_COUNT; z++) {
         target_row(zone_names[z], &cfg->touch_map[z], zone_desc[z]);
     }
@@ -529,9 +534,9 @@ void MoonlightUi::settings_build() {
         SettingRow r;
         r.type = SettingRow::Link;
         r.label = "Reset all mapping";
-        r.desc = "Puts every button and all four gamepad-view boxes back to "
+        r.desc = "Puts every button and all five gamepad-view boxes back to "
                  "the defaults: A sends A, L sends LB, ZL sends LT, and the "
-                 "boxes send L3, L3 + R3, R3 and Guide.";
+                 "boxes send L3, L3 + R3, R3, HOME and Capture.";
         r.activate = [this, cfg] {
             if (confirm("Reset button mapping?",
                         "Every button and gamepad-view box goes back to its "
