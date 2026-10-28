@@ -32,7 +32,9 @@ class N3dsTouchscreenInput : public ISubscriber {
 
     void accept(IMessage *msg) override;
 
-    void n3dsinput_handle_touch(u32 kDown, u32 kUp);
+    // menu_only (view-only mode): views still switch, but only the stream
+    // menu gets touches
+    void n3dsinput_handle_touch(u32 kDown, u32 kUp, bool menu_only = false);
     bool is_menu_active() const {
         return touch_type == N3dsTouchType::MENU_TOUCH;
     }

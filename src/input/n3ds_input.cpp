@@ -201,10 +201,9 @@ void N3dsInput::n3dsinput_handle_event() {
     previous_state = gamepad_state;
 
     // In view-only mode the stream menu still works (views, EXIT), but the
-    // other touch views would send mouse, keyboard or touch input
-    if (!view_only || touch_handler->is_menu_active()) {
-        touch_handler->n3dsinput_handle_touch(kDown, kUp);
-    }
+    // other touch views would send mouse, keyboard or touch input. The call
+    // must still happen so a pending view (the menu) gets switched in.
+    touch_handler->n3dsinput_handle_touch(kDown, kUp, view_only);
 
     // Rebuilt from the held buttons every frame through the button mapping
     _read_buttons(hidKeysHeld());

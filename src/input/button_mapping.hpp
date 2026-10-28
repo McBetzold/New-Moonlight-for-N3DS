@@ -18,7 +18,8 @@
 // Button mapping: which controller input each 3DS button and each zone of
 // the bottom-screen gamepad view sends. Stored in moonlight.conf as
 //   button_map = a=a,b=b,x=x,y=y,l=lb,r=rb,zl=lt,zr=rt,start=menu,select=view
-//   touch_map = topleft=l3,topmiddle=l3r3,topright=r3,bottom=guide
+//   touch_map = topleft=l3,topmiddle=l3r3,topright=r3,bottomleft=guide,
+//               bottomright=capture
 #pragma once
 
 #include "../config.hpp"

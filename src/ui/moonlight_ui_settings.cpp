@@ -519,11 +519,9 @@ void MoonlightUi::settings_build() {
         "screen.",
         "The middle box across the top of the gamepad view.",
         "The right box across the top of the gamepad view.",
-        "The left box in the bottom half of the gamepad view (HOME by "
-        "default).",
-        "The right box in the bottom half of the gamepad view. Capture by "
-        "default: it presses View and Menu together, which SwitchBridge "
-        "turns into the Switch's Capture button."};
+        "The left box in the bottom half of the gamepad view.",
+        "The right box in the bottom half. Capture means View + Menu "
+        "together; SwitchBridge turns it into Capture."};
     static const char *zone_names[TOUCH_ZONE_COUNT] = {
         "Top left box", "Top middle box", "Top right box", "Bottom left box",
         "Bottom right box"};

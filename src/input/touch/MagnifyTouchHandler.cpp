@@ -29,6 +29,13 @@ MagnifyTouchHandler::MagnifyTouchHandler(GAMEPAD_STATE *gamepad_state,
     _set_touch_offsets(GSP_SCREEN_HEIGHT_BOTTOM / 2, GSP_SCREEN_WIDTH / 2);
 }
 
+// Let go of the button if the view is switched with the stylus still down
+MagnifyTouchHandler::~MagnifyTouchHandler() {
+    if (pressed) {
+        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
+    }
+}
+
 void MagnifyTouchHandler::_set_touch_offsets(int center_x, int center_y) {
     int x_center_image = (center_x * image_width) / GSP_SCREEN_HEIGHT_BOTTOM;
     int y_center_image = (center_y * image_height) / GSP_SCREEN_WIDTH;
@@ -63,6 +70,7 @@ void MagnifyTouchHandler::_handle_touch_down(touchPosition touch) {
                                  touch.py + y_touch_offset, image_width,
                                  image_height);
         LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
+        pressed = true;
         return;
     }
 
@@ -77,8 +85,11 @@ void MagnifyTouchHandler::_handle_touch_down(touchPosition touch) {
 }
 
 void MagnifyTouchHandler::_handle_touch_up(touchPosition touch) {
-    if (_lock_view()) {
+    // Release whatever was pressed, even if LB/RB was let go before the
+    // stylus; checking the lock here left the button held on the PC
+    if (pressed) {
         LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
+        pressed = false;
     }
 }
 

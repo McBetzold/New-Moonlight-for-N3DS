@@ -25,6 +25,7 @@
 #include <http.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -161,6 +162,11 @@ void MoonlightUi::run() {
             break;
         }
         render(nullptr);
+    }
+    // Settings are saved when the page is left; closing the app from the
+    // HOME Menu while it is open would otherwise lose the changes
+    if (view_ == View::Settings) {
+        config_save((char *)MOONLIGHT_3DS_PATH "/moonlight.conf", config_);
     }
 }
 
@@ -580,7 +586,9 @@ bool MoonlightUi::wait_job(const std::shared_ptr<Worker::Job> &job, Modal &m) {
     int r = show_modal(m, [&job] { return job->is_done(); });
     if (r == -3) {
         // App is closing: still let the job finish so libgamestream state is
-        // consistent before teardown.
+        // consistent before teardown. Abort a pairing wait for the PIN
+        // (ignored by any other request) so closing does not hang.
+        http_cancel();
         while (!job->is_done()) {
             svcSleepThread(5 * 1000 * 1000);
         }
@@ -1387,14 +1395,23 @@ void MoonlightUi::pair_host(const std::shared_ptr<HostEntry> &host,
 
     auto status = std::make_shared<int>(GS_FAILED);
     auto error = std::make_shared<std::string>();
-    auto job = Worker::instance().post([host, pin, passphrase, status,
-                                        error] {
+    // Set by Cancel. The job checks it after opening the cancel window, so a
+    // Cancel pressed while the job is still queued behind a probe counts too
+    auto cancelled = std::make_shared<std::atomic<bool>>(false);
+    auto job = Worker::instance().post([host, pin, passphrase, status, error,
+                                        cancelled] {
         // Pairing waits for the user to type the PIN on the PC
         http_set_timeout_s(3 * 60);
         http_set_connect_timeout_s(10);
         std::string pin_copy = pin;
         // The dialog's Cancel button aborts the wait for the PIN
         http_begin_cancellable();
+        if (cancelled->load()) {
+            http_end_cancellable();
+            http_set_timeout_s(60);
+            *error = "Cancelled";
+            return;
+        }
         *status = gs_pair(&host->server, &pin_copy[0],
                           passphrase.empty() ? nullptr : passphrase.c_str());
         http_end_cancellable();
@@ -1425,6 +1442,7 @@ void MoonlightUi::pair_host(const std::shared_ptr<HostEntry> &host,
         if (!job->is_done()) {
             // Cancel (or B): abort the request and wait for the worker to
             // let go, which takes at most about a second
+            cancelled->store(true);
             http_cancel();
             Modal c;
             c.title = "Cancelling pairing";
