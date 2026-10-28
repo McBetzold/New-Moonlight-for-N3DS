@@ -130,6 +130,9 @@ MoonlightUi::MoonlightUi(PCONFIGURATION config) : config_(config) {
 
 MoonlightUi::~MoonlightUi() {
     Worker::instance().drop_background();
+    // The app is closing: a probe, app list or box art request in progress
+    // would otherwise hold the close for up to its 60 s timeout
+    http_abort_all();
     Worker::instance().shutdown();
     free_boxart();
     gfx_fini();
@@ -175,6 +178,9 @@ void MoonlightUi::run() {
 bool MoonlightUi::poll() {
     if (!aptMainLoop()) {
         quit_ = true;
+        // Any job a dialog is waiting on fails within a second instead of
+        // running to its timeout (up to a minute) while the close waits
+        http_abort_all();
         return false;
     }
     input_poll(in_);

@@ -30,13 +30,16 @@ static uint32_t connect_timeout_s = 10;
 static int log_level = 0;
 static volatile bool cancellable = false;
 static volatile bool cancel_requested = false;
+static volatile bool abort_all = false;
 
 // libcurl calls this about once a second even while waiting for the host,
 // so a cancel takes effect within a second
 static int _progress_curl(void *clientp, curl_off_t dltotal, curl_off_t dlnow,
                           curl_off_t ultotal, curl_off_t ulnow) {
-    return (cancellable && cancel_requested) ? 1 : 0;
+    return (abort_all || (cancellable && cancel_requested)) ? 1 : 0;
 }
+
+void http_abort_all(void) { abort_all = true; }
 
 void http_begin_cancellable(void) {
     cancel_requested = false;
@@ -107,6 +110,10 @@ void http_set_connect_timeout_s(uint32_t connect_timeout_in) {
 void http_set_log_level(int log_level_in) { log_level = log_level_in; }
 
 int http_request(char *url, PHTTP_DATA data) {
+    if (abort_all) {
+        gs_error = "Cancelled";
+        return GS_FAILED;
+    }
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, data);
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, connection_timeout_s);

@@ -167,6 +167,43 @@ MvdDecoder::MvdDecoder(int videoFormat, int width, int height, int redrawRate,
 
 // This function must be called after
 // decoding is finished
+static volatile bool mvd_exit_done = false;
+
+static void mvd_exit_thread(void *) {
+    mvdstdExit();
+    mvd_exit_done = true;
+}
+
+void mvd_service_shutdown(int timeout_ms) {
+    if (!mvd_service_initialized) {
+        return;
+    }
+    // Closing the app with the decoder service still open leaves the
+    // hardware session for the system to tear down. Shut it down properly,
+    // but on another thread with a time limit: mvdstdExit() waits with no
+    // limit while the hardware reports busy (about a minute on some units,
+    // upstream issue #116). If it does not finish in time the app exits
+    // anyway, which is what happened before this was added.
+    mvd_exit_done = false;
+    s32 priority = 0x30;
+    svcGetThreadPriority(&priority, CUR_THREAD_HANDLE);
+    Thread t = threadCreate(mvd_exit_thread, nullptr, 0x4000, priority, -1,
+                            false);
+    if (t == NULL) {
+        return;
+    }
+    for (int waited = 0; waited < timeout_ms && !mvd_exit_done; waited += 10) {
+        svcSleepThread(10 * 1000 * 1000);
+    }
+    if (mvd_exit_done) {
+        threadJoin(t, U64_MAX);
+        threadFree(t);
+        mvd_service_initialized = false;
+    } else {
+        printf("MVD service still busy; exiting without waiting\n");
+    }
+}
+
 MvdDecoder::~MvdDecoder() {
     if (decode_thread) {
         stop_decoding = true;

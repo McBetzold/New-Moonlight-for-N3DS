@@ -129,4 +129,7 @@ class MvdDecoder : public VideoDecoderBase {
 
 extern DECODER_RENDERER_CALLBACKS decoder_callbacks_n3ds;
 extern DECODER_RENDERER_CALLBACKS decoder_callbacks_n3ds_mvd;
+// Shuts the hardware decoder service down at app exit, giving up after
+// timeout_ms if the hardware stays busy
+void mvd_service_shutdown(int timeout_ms);
 extern DECODER_RENDERER_CALLBACKS decoder_callbacks_mock;

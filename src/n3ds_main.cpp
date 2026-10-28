@@ -21,6 +21,7 @@
 #include "input/touch/TouchHandler.hpp"
 #include "system/apt_state.hpp"
 #include "ui/moonlight_ui.hpp"
+#include "video/video.hpp"
 
 #include <3ds.h>
 #include <client.h>
@@ -122,6 +123,9 @@ static int main_loop(int argc, char *argv[]) {
         ui::MoonlightUi app(&config);
         app.run();
     }
+    // After a stream the hardware decoder service is still open (it is kept
+    // across streams); close it before the process exits
+    mvd_service_shutdown(2000);
     return 0;
 }
 
