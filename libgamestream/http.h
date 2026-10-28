@@ -48,6 +48,8 @@ void http_set_log_level(int log_level_in);
 void http_begin_cancellable(void);
 void http_end_cancellable(void);
 void http_cancel(void);
+// The app is closing: abort the request in progress and fail every later one
+void http_abort_all(void);
 
 #ifdef __cplusplus
 }
