@@ -115,6 +115,10 @@ class MvdDecoder : public VideoDecoderBase {
     MVDSTD_Config mvdstd_config;
     u8 *rgb_img_buffer;
     bool first_frame = true;
+    // An IDR was requested at stream start and has not arrived yet;
+    // startup_frames bounds the wait in case it is never flagged as one
+    bool startup_idr_pending = false;
+    int startup_frames = 0;
 
     // Frame queue: filled by submit_decode_unit() on the receive thread,
     // drained by the decode thread.

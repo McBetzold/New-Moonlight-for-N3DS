@@ -69,7 +69,10 @@ class N3dsRendererBase {
     // the host's frame number, to count frames lost on the network, and its
     // capture-to-send latency in tenths of a millisecond. Feeds the debug
     // view's status panel.
-    static void note_frame(int frame_number, unsigned host_latency_01ms);
+    // track_trouble=false records the frame without counting the gap before
+    // it as loss or a stall (stream start, while waiting for a requested IDR)
+    static void note_frame(int frame_number, unsigned host_latency_01ms,
+                           bool track_trouble = true);
 
     // Shows a mouse-pointer icon in the top screen's corner while the
     // C-stick is acting as a mouse (set from the input thread)

@@ -63,8 +63,16 @@ void N3dsRendererBase::reset_frame_stats() {
 }
 
 void N3dsRendererBase::note_frame(int frame_number,
-                                  unsigned host_latency_01ms) {
+                                  unsigned host_latency_01ms,
+                                  bool track_trouble) {
     u64 now = svcGetSystemTick();
+    if (!track_trouble) {
+        // Expected gap: the frames moonlight-common-c drops while waiting
+        // for the IDR requested at stream start
+        last_frame_tick = now;
+        last_frame_number = frame_number;
+        return;
+    }
     // A long silence means this is the first frame of a new stream; start the
     // bookkeeping over instead of reporting the gap as a stall
     if (last_frame_tick != 0 && now - last_frame_tick > 5 * SYSCLOCK_ARM11) {
