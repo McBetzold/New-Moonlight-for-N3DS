@@ -6,10 +6,11 @@ retail games. bannertool packs it into the CIA when the Makefile's
 `BANNER_IMAGE` ends in `.cgfx`; with a `.png` it makes the old flat banner.
 
 `make_banner.py` builds the scene from code, so no 3D modelling program is
-needed: the eight-wedge Moonlight logo turning like a wheel while it bobs and
-sways, a glow behind it, the title, and a night sky with stars at several
-depths for the 3D slider. The top of the script lists the camera and the
-limits the scene is designed around.
+needed: the eight-wedge Moonlight logo turning like a wheel in place, a glow
+behind it and the title, all popping out of the screen, in front of a night
+sky with twinkling stars from deep behind the screen to out in front of it.
+The top of the script lists the camera and the limits the scene is designed
+around.
 
 ## Rebuilding
 

@@ -6,22 +6,28 @@ and packed into the CIA by bannertool (see README.md next to this file).
     python make_banner.py [--out DIR] [--preview]
 
 Scene (glTF units, camera from pycgfx's banner-camera.gltf: position
-(0, 1, 44.786), looking down -Z, 30 degree vertical FOV, 5:3, near 26.5):
+(0, 1, 44.786), looking down -Z, 30 degree vertical FOV, 5:3, near 26.5,
+so nothing may come closer than z = 18):
   * a night-sky backdrop far behind everything (z = -16)
-  * distant stars, a few twinkling, plus some closer ones for 3D depth
-  * the Moonlight logo: eight separate 3D wedges with real gaps, turning
-    like a wheel while it bobs and sways (z = 4, closest to the viewer)
-  * a soft glow behind the logo
-  * "Moonlight" / "Game Streaming" floating at z = 2
+  * twinkling stars from deep behind the screen (z = -14.5) to well in
+    front of it (z = 15), kept out of the logo and text areas
+  * the Moonlight logo: eight separate 3D wedges with real gaps, fixed in
+    place and turning like a wheel, popping out of the screen (z = 11)
+  * a soft glow just behind the logo
+  * "Moonlight" / "Game Streaming" popping out at z = 9
+  Things are placed by their top-screen pixel position and scaled with
+  their depth, so moving something closer keeps its place on screen.
 
 Animation notes (pycgfx limitations):
   * every rotation is stored as Euler angles, and the middle (Y) angle is
-    limited to +-90 degrees, so each animated node turns around one axis
-    only, nested: bob (translation) > sway (Y) > tilt (X) > spin (Z)
+    limited to +-90 degrees, so an animated node must turn around one axis
+    only (nest nodes for more)
   * the logo looks the same after every 45 degrees, so spinning exactly 90
     degrees per loop repeats seamlessly with no angle wrap
   * all animations share one loop, so every periodic motion completes a
     whole number of cycles in LOOP_SECONDS
+  * translucent meshes are drawn in node order, so they are sorted back to
+    front by depth
   * the HOME Menu light shines straight into the screen and there is no
     ambient light: faces turned away from the viewer go dark
 """
@@ -183,7 +189,7 @@ def make_radial(size, color, max_alpha, power):
 
 def make_star():
     size = 32
-    im = make_radial(size, (235, 240, 255), 1.0, 2.6)
+    im = make_radial(size, (235, 240, 255), 1.0, 1.9)
     px = im.load()
     c = size // 2
     # four-point glint
@@ -191,7 +197,7 @@ def make_star():
         f = max(0.0, 1.0 - abs(i - c) / c) ** 3
         for (x, y) in ((i, c), (c, i), (i, c - 1), (c - 1, i)):
             r, g, b, a = px[x, y]
-            px[x, y] = (r, g, b, min(255, a + int(200 * f)))
+            px[x, y] = (r, g, b, min(255, a + int(255 * f)))
     return quantize_rgba4(im)
 
 
@@ -334,6 +340,35 @@ class Material:
         return self.color_anim(time) if self.color_anim else self.color
 
 
+def screen_to_world(sx, sy, z):
+    """World x, y at depth z for a point at screen position (sx, sy), both
+    -1..1 from the left/bottom edge to the right/top edge."""
+    dist = CAM_POS[2] - z
+    tan_y = math.tan(CAM_YFOV / 2)
+    return (sx * dist * tan_y * CAM_ASPECT, CAM_POS[1] + sy * dist * tan_y)
+
+
+def world_per_pixel(z):
+    """World units per top-screen pixel (240 px tall) at depth z."""
+    return 2 * (CAM_POS[2] - z) * math.tan(CAM_YFOV / 2) / 240.0
+
+
+# Where things sit on the top screen (400x240 px) and how close they are.
+# Larger z = closer to the viewer = further out of the screen in 3D.
+LOGO_PX, LOGO_RADIUS_PX, LOGO_Z = (97, 116), 66, 11.0
+TITLE_PX, TITLE_W_PX, TITLE_Z = (292, 97), 178, 9.0
+SUB_PX, SUB_W_PX = (292, 139), 168
+HALO_Z = 9.5  # just behind the logo
+KEEP_CLEAR = [  # star-free areas: the logo and the text
+    ("circle", LOGO_PX, LOGO_RADIUS_PX + 12),
+    ("rect", (196, 66, 392, 156)),
+]
+
+
+def px_to_world(px, py, z):
+    return screen_to_world(px / 200.0 - 1, 1 - py / 120.0, z)
+
+
 def build_scene():
     roots = []
     mats = {}
@@ -347,68 +382,95 @@ def build_scene():
     bd = mat("Sky", texture=make_backdrop(), roughness=1.0)
     roots.append(Node("Sky", quad_mesh(56, 34), bd, t=(0, 1.0, -16)))
 
-    # the logo (opaque): bob > sway(Y) > tilt(X) > spin(Z) + mesh
+    # the logo (opaque): fixed in place, out in front of the screen, turning
+    # like a wheel
     logo_mat = mat("Logo", color=(0.95, 0.96, 1.0, 1.0), roughness=0.45)
-    centre = (-9.4, 1.4, 4.0)
-    bob = Node("LogoBob", t=centre)
-    bob.anim["translation"] = lambda tm: (
-        centre[0], centre[1] + 0.35 * math.sin(two_pi_t(tm)), centre[2])
-    sway = bob.add(Node("LogoSway"))
-    sway.anim["rotation"] = lambda tm: quat_axis(
-        (0, 1, 0), math.radians(16) * math.sin(two_pi_t(tm)))
-    tilt = sway.add(Node("LogoTilt"))
-    tilt.anim["rotation"] = lambda tm: quat_axis(
-        (1, 0, 0), math.radians(6) * math.cos(two_pi_t(tm)))
-    spin = tilt.add(Node("LogoSpin", logo_mesh(6.0, 0.55, 1.4), logo_mat))
+    k = world_per_pixel(LOGO_Z)
+    lx, ly = px_to_world(LOGO_PX[0], LOGO_PX[1], LOGO_Z)
+    radius = LOGO_RADIUS_PX * k
+    spin = Node("LogoSpin", logo_mesh(radius, radius * 0.09, radius * 0.23),
+                logo_mat, t=(lx, ly, LOGO_Z))
     spin.anim["rotation"] = lambda tm: quat_axis(
         (0, 0, 1), -math.radians(90) * tm / LOOP_SECONDS)
-    roots.append(bob)
+    roots.append(spin)
 
-    # translucent pieces, drawn back to front in this order
+    # translucent pieces, all sorted back to front below
+    blended = []
+
+    # stars: every one twinkles; spread from deep behind the screen to well
+    # in front of it, but kept out of the logo and text areas
     star_tex = make_star()
-    rnd = random.Random(3)
-    plain_star = mat("Star", texture=star_tex, blend=True)
     twinklers = []
-    for i in range(6):
-        phase = i / 6.0
-        cycles = 1 + (i % 2)
+    for i in range(8):
+        phase = i / 8.0
+        cycles = 1 + (i % 3)
 
         def anim(tm, phase=phase, cycles=cycles):
-            b = 0.55 + 0.45 * math.sin(
+            s = 0.5 + 0.5 * math.sin(
                 2 * math.pi * (cycles * tm / LOOP_SECONDS + phase))
+            b = 0.12 + 0.88 * s * s
             return (b, b, b, b)
-        twinklers.append(mat("StarTwinkle%d" % i, texture=star_tex, blend=True,
+        twinklers.append(mat("Star%d" % i, texture=star_tex, blend=True,
                              color_anim=anim))
-    stars = []
-    # far stars, just in front of the sky
-    for i in range(22):
-        x, y = rnd.uniform(-25, 25), rnd.uniform(-11, 16)
-        if -1 < x < 19 and -3 < y < 6:  # keep the title area clean
-            continue
-        size = rnd.uniform(0.6, 1.3)
-        m = twinklers[i % 6] if i % 3 == 0 else plain_star
-        stars.append((-14.5, Node("StarFar%d" % i, quad_mesh(size, size), m,
-                                  t=(x, y, -14.5))))
-    # a few closer stars for depth, near the edges
-    for i, (x, y, z) in enumerate([(15.5, 9.0, -3), (-17, -6.5, -2),
-                                   (2.0, 10.5, -5), (18.5, -7.0, -6),
-                                   (-4.5, -8.6, -1)]):
-        m = twinklers[(i + 2) % 6]
-        stars.append((z, Node("StarNear%d" % i, quad_mesh(0.9, 0.9), m,
-                              t=(x, y, z))))
-    stars.sort(key=lambda s: s[0])
-    roots += [n for _, n in stars]
+
+    def clear(px, py, pad):
+        for kind, a, *rest in KEEP_CLEAR:
+            if kind == "circle":
+                if math.hypot(px - a[0], py - a[1]) < rest[0] + pad:
+                    return False
+            elif a[0] - pad < px < a[2] + pad and a[1] - pad < py < a[3] + pad:
+                return False
+        return True
+
+    rnd = random.Random(11)
+    placed = []
+    # (count, depth range, apparent size in px)
+    for count, (z0, z1), (s0, s1) in [(12, (-14.5, -9), (6, 9)),
+                                      (8, (-6, 2), (9, 13)),
+                                      (12, (4, 15), (13, 20))]:
+        n = 0
+        tries = 0
+        while n < count and tries < 2000:
+            tries += 1
+            px, py = rnd.uniform(8, 392), rnd.uniform(8, 232)
+            size_px = rnd.uniform(s0, s1)
+            if not clear(px, py, size_px):
+                continue
+            if any(math.hypot(px - qx, py - qy) < 26 for qx, qy in placed):
+                continue
+            z = rnd.uniform(z0, z1)
+            x, y = px_to_world(px, py, z)
+            size = size_px * world_per_pixel(z)
+            m = twinklers[len(placed) % len(twinklers)]
+            blended.append((z, Node("Star%02d" % len(placed),
+                                    quad_mesh(size, size), m, t=(x, y, z))))
+            placed.append((px, py))
+            n += 1
 
     halo = mat("Halo", texture=quantize_rgba4(
         make_radial(64, (150, 190, 255), 0.42, 1.8)), blend=True)
-    roots.append(Node("Halo", quad_mesh(19, 19), halo, t=(-9.4, 1.4, 1.0)))
+    hx, hy = px_to_world(LOGO_PX[0], LOGO_PX[1], HALO_Z)
+    hs = LOGO_RADIUS_PX * 3.1 * world_per_pixel(HALO_Z)
+    blended.append((HALO_Z, Node("Halo", quad_mesh(hs, hs), halo,
+                                 t=(hx, hy, HALO_Z))))
 
+    k = world_per_pixel(TITLE_Z)
     title = mat("Title", texture=make_text("Moonlight", 256, 64, TITLE_FONTS,
                                            (255, 255, 255)), blend=True)
-    roots.append(Node("Title", quad_mesh(17.0, 4.25), title, t=(8.8, 3.2, 2.0)))
+    tx, ty = px_to_world(TITLE_PX[0], TITLE_PX[1], TITLE_Z)
+    blended.append((TITLE_Z, Node("Title", quad_mesh(TITLE_W_PX * k,
+                                                     TITLE_W_PX * k / 4), title,
+                                  t=(tx, ty, TITLE_Z))))
     sub = mat("Subtitle", texture=make_text("Game Streaming", 256, 32, SUB_FONTS,
                                             (178, 196, 228)), blend=True)
-    roots.append(Node("Subtitle", quad_mesh(16.0, 2.0), sub, t=(8.8, -0.7, 2.0)))
+    sx, sy = px_to_world(SUB_PX[0], SUB_PX[1], TITLE_Z)
+    blended.append((TITLE_Z, Node("Subtitle", quad_mesh(SUB_W_PX * k,
+                                                        SUB_W_PX * k / 8), sub,
+                                  t=(sx, sy, TITLE_Z))))
+
+    # pycgfx draws translucent meshes in node order: back to front
+    blended.sort(key=lambda b: b[0])
+    roots += [n for _, n in blended]
     return roots, mats
 
 
