@@ -83,12 +83,17 @@ void N3dsTouchscreenInput::_n3dsinput_set_touch(N3dsTouchType touch_type_in) {
     touch_type = touch_type_in;
 }
 
-void N3dsTouchscreenInput::n3dsinput_handle_touch(u32 kDown, u32 kUp) {
+void N3dsTouchscreenInput::n3dsinput_handle_touch(u32 kDown, u32 kUp,
+                                                  bool menu_only) {
     if (next_touch_type.load() != touch_type) {
         _n3dsinput_set_touch(next_touch_type.load());
     }
 
     if (handler == nullptr) {
+        return;
+    }
+    // View-only: the other views would send mouse, keyboard or touch input
+    if (menu_only && touch_type != N3dsTouchType::MENU_TOUCH) {
         return;
     }
     handler->tick();

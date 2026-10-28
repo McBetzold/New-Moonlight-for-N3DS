@@ -241,7 +241,7 @@ class MagnifyTouchHandler : public TouchHandlerBase {
   public:
     MagnifyTouchHandler(GAMEPAD_STATE *gamepad_state, int image_width,
                         int image_height);
-    ~MagnifyTouchHandler() = default;
+    ~MagnifyTouchHandler();
 
   private:
     void _handle_touch_down(touchPosition touch) override;
@@ -251,6 +251,8 @@ class MagnifyTouchHandler : public TouchHandlerBase {
     bool _lock_view();
 
   private:
+    // A left click was sent and not released yet
+    bool pressed = false;
     GAMEPAD_STATE *gamepad_state;
     int image_width;
     int image_height;
