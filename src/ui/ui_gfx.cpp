@@ -150,7 +150,11 @@ void gfx_fini() {
     g_ready = false;
 }
 
-bool gfx_ready() { return g_ready; }
+// Once the system has asked the app to close (for example Close in the HOME
+// Menu after the stream jumped there), libctru does not give the GPU back,
+// so a new frame would wait for a VBlank that never comes and the close
+// would hang forever. Nothing may be drawn after that point.
+bool gfx_ready() { return g_ready && !aptShouldClose(); }
 
 void frame_begin() {
     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);

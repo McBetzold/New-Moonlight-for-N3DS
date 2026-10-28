@@ -372,6 +372,13 @@ StreamOutcome MoonlightUi::run_stream(const std::shared_ptr<HostEntry> &host,
         render(nullptr);
         aptJumpToHomeMenu();
         input_reset();
+        // Close in the HOME Menu wakes the app without giving the GPU back.
+        // Quit now: the caller would otherwise draw the next launcher frame
+        // and wait forever for a VBlank (the "hangs on close" bug).
+        if (aptShouldClose()) {
+            quit_ = true;
+            http_abort_all();
+        }
     }
 
     return outcome;
