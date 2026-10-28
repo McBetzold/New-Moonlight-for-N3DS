@@ -220,7 +220,9 @@ class MoonlightUi {
                  const std::string &yes, const std::string &no = "Cancel",
                  bool danger = false);
     int menu(const std::string &title, const std::vector<std::string> &items);
-    bool wait_job(const std::shared_ptr<Worker::Job> &job, Modal &m);
+    // on_close runs first if the app is closing while the job is still busy
+    bool wait_job(const std::shared_ptr<Worker::Job> &job, Modal &m,
+                  const std::function<void()> &on_close = nullptr);
     // allow_empty: OK with an empty field returns true with out == ""
     bool prompt_text(const std::string &hint, const std::string &initial,
                      std::string &out, size_t max_len = 60,

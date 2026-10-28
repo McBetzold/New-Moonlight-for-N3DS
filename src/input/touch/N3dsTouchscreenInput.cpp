@@ -92,11 +92,12 @@ void N3dsTouchscreenInput::n3dsinput_handle_touch(u32 kDown, u32 kUp,
     if (handler == nullptr) {
         return;
     }
+    // Local redraws only (the Commands list); sends nothing to the host
+    handler->tick();
     // View-only: the other views would send mouse, keyboard or touch input
     if (menu_only && touch_type != N3dsTouchType::MENU_TOUCH) {
         return;
     }
-    handler->tick();
 
     touchPosition touch;
     hidTouchRead(&touch);

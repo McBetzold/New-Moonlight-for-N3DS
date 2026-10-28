@@ -65,6 +65,10 @@ void add_pair_address(std::string address, uint16_t port) {
     remove(address_file);
 
     FILE *fd = fopen(address_file, "w");
+    if (fd == NULL) {
+        // SD card write error; nothing to write to
+        return;
+    }
     for (auto addr_string : address_list) {
         trim(addr_string);
         fprintf(fd, "%s\n", addr_string.c_str());
@@ -81,6 +85,10 @@ void remove_pair_address(std::string address, uint16_t port) {
     remove(address_file);
 
     FILE *fd = fopen(address_file, "w");
+    if (fd == NULL) {
+        // SD card write error; nothing to write to
+        return;
+    }
     for (auto addr_string : address_list) {
         if (addr_string != address) {
             trim(addr_string);

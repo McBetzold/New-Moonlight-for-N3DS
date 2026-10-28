@@ -142,8 +142,10 @@ class MouseTouchHandler : public TouchHandlerBase {
 
   private:
     int mouse_button = -1;
-    int previous_x = 0;
-    int previous_y = 0;
+    // -1 = no touchpad drag yet; 0 made the first click after opening the
+    // view jump the cursor by (3 * px, 3 * py) with the button held
+    int previous_x = -1;
+    int previous_y = -1;
     bool v_scroll = false;
     bool h_scroll = false;
 };
