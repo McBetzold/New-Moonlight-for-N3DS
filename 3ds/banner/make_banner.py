@@ -46,7 +46,9 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import logo_art  # noqa: E402
 
-LOOP_SECONDS = 10.0  # = the HOME Menu's spin period (AUTOROTATE_SECONDS)
+# the loop: the wheel turns once per loop; the HOME Menu turns the banner
+# once per 10 s, so autorotate turns LOOP_SECONDS / 10 times per loop
+LOOP_SECONDS = 20.0
 # how far each of the two nested wheel nodes turns per loop (they add up)
 SPIN_DEG_PER_NODE = 179.9
 # parts to leave out (for finding what the HOME Menu chokes on)
@@ -144,7 +146,7 @@ def quantize_rgba4(im):
 # The rainbow-road backdrop, drawn in top-screen pixels (at 2x) and then
 # mapped onto the backdrop quad. All its settings are here to tweak.
 SKY_EDGE, SKY_MID = (7, 11, 31), (27, 20, 70)          # #070B1F, #1B1446
-NEBULAE = [  # (centre px, radius px, colour, opacity)
+NEBULAE = [  # (centre px, radius px, colour, opacity): wisps near the oval's edge
     ((70, 70), 70, (231, 166, 215), 0.16),     # pink, upper left
     ((345, 70), 60, (184, 166, 232), 0.14),    # lavender, upper right
     ((60, 190), 60, (127, 211, 216), 0.13),    # teal, lower left
@@ -154,12 +156,12 @@ NEBULAE = [  # (centre px, radius px, colour, opacity)
 # under the title and curving up as it fades into the distance
 RIBBON = [(-10, 150), (140, 214), (300, 214), (382, 168)]
 RIBBON_WIDTH = (13.0, 2.5)        # px at the start and at the end
-RIBBON_OPACITY = 0.75
+RIBBON_OPACITY = 0.0   # no rainbow road in Isaac's latest banner picture
 RIBBON_COLOURS = [(226, 52, 52), (244, 140, 40), (246, 214, 52), (90, 190, 80),
                   (60, 182, 196), (60, 120, 220), (140, 80, 200)]
 DIM_STARS = 70
-TEXT_SHADE = ((292, 128), (100, 52), 0.25)   # darker oval behind the title
-BACKDROP_TEX = (256, 128)
+TEXT_SHADE = ((292, 128), (100, 52), 0.20)   # darker oval behind the title
+BACKDROP_TEX = (128, 64)   # test 7's size (worked on the 3DS)
 
 
 def _bezier(p, t):
@@ -395,11 +397,8 @@ VISIBLE_OVAL = ((200, 128), (189, 96))   # 6 px inside the measured oval
 WHEEL_PX, WHEEL_R_PX, WHEEL_Z = (110, 128), 72, 10.0
 BADGE_Z = 11.0
 TITLE_Z = 9.0
-# the two title lines: left edge and the centre heights of the lines; the
-# letter height is set so "Moonlight" is TITLE_WIDTH px wide, and "for N3DS"
-# uses the same height
-TITLE_LEFT, TITLE_WIDTH = 210, 160
-TITLE_ROWS = (104, 148)
+# the title card: left edge, centre height and how wide "Moonlight" is
+TITLE_LEFT, TITLE_CY, TITLE_WIDTH = 210, 128, 160
 VISIBLE_Y = (44, 208)
 KEEP_CLEAR = [  # star-free areas: the logo and the title
     ("circle", WHEEL_PX, WHEEL_R_PX + 10),
@@ -416,7 +415,7 @@ def in_oval(px, py, pad=0.0):
 AUTOROTATE_SECONDS = 10.0
 # parts drawn as screen-facing billboards by convert.py (their nodes sit at
 # the origin; the geometry itself is moved into place)
-BILLBOARDS = ("backdrop", "badge", "title", "title2")
+BILLBOARDS = ("backdrop", "badge", "title")
 
 
 def offset_mesh(mesh, offset):
@@ -515,39 +514,27 @@ def build_scene():
         tw.anim["scale"] = scale
 
     # "new" and its dashes, centred on the wheel; billboards at the origin.
-    # Textures: badge 128x32 (about 1 texel per screen pixel), title lines
-    # 256x64 and 128x64 (all sizes different: see check_texture_sizes)
+    # Textures as in test 7 (worked): backdrop 128x64, wheel 128x128, star
+    # 32x32, badge 256x64, title 256x128 (all sizes different)
     img_px = WHEEL_R_PX / 0.49
     kb = world_per_pixel(BADGE_Z)
     bw_px = 0.88 * img_px
     bx, by = px_to_world(WHEEL_PX[0], WHEEL_PX[1], BADGE_Z)
-    badge = mat("badge", texture=quantize_rgba4(logo_art.new_badge(128, 32)),
+    badge = mat("badge", texture=quantize_rgba4(logo_art.new_badge(256, 64)),
                 blend=True)
     root.add(Node("badge", offset_mesh(quad_mesh(bw_px * kb, bw_px * kb / 4),
                                        (bx, by, BADGE_Z)), badge))
     kt = world_per_pixel(TITLE_Z)
-    lines = [("title", logo_art.rainbow_text("Moonlight", 96), (256, 64)),
-             ("title2", logo_art.rainbow_text("for N3DS", 96, red_fill=(5,)),
-              (128, 64))]
-    # one scale for both lines (screen px per pixel of the drawn text), so
-    # their letters are the same size whatever their ascenders/descenders
-    k_px = TITLE_WIDTH / lines[0][1].width
-    for (name, img, tex), row in zip(lines, TITLE_ROWS):
-        text_h = img.height * k_px
-        card = logo_art.text_card(img, tex[0], tex[1])
-        # how big one texel is on screen so the letters are text_h px tall
-        fit = min(tex[0] * 0.97 / img.width, tex[1] * 0.92 / img.height)
-        texel = text_h / (img.height * fit)
-        w, h = tex[0] * texel, tex[1] * texel
-        left = TITLE_LEFT - tex[0] * 0.015 * texel
-        cx, cy = left + w / 2, row
-        if not (in_oval(left + img.width * fit * texel, cy - text_h / 2)
-                and in_oval(left + img.width * fit * texel, cy + text_h / 2)):
-            sys.exit("%s does not fit inside the visible oval" % name)
-        m = mat(name, texture=quantize_rgba4(card), blend=True)
-        tx, ty = px_to_world(cx, cy, TITLE_Z)
-        root.add(Node(name, offset_mesh(quad_mesh(w * kt, h * kt),
-                                        (tx, ty, TITLE_Z)), m))
+    img, frac = logo_art.rainbow_title_block(256, 128)
+    w_px = TITLE_WIDTH / frac            # the card, so "Moonlight" is TITLE_WIDTH
+    h_px = w_px / 2
+    if not (in_oval(TITLE_LEFT + TITLE_WIDTH, TITLE_CY - h_px * 0.42)
+            and in_oval(TITLE_LEFT + TITLE_WIDTH * 0.8, TITLE_CY + h_px * 0.42)):
+        sys.exit("the title does not fit inside the visible oval")
+    title = mat("title", texture=quantize_rgba4(img), blend=True)
+    tx, ty = px_to_world(TITLE_LEFT + w_px / 2, TITLE_CY, TITLE_Z)
+    root.add(Node("title", offset_mesh(quad_mesh(w_px * kt, h_px * kt),
+                                       (tx, ty, TITLE_Z)), title))
 
     roots = [root]
     if OMIT:
@@ -824,8 +811,9 @@ def main():
     ap.add_argument("--preview", action="store_true",
                     help="also render preview frames (slow, pure Python)")
     ap.add_argument("--assets", metavar="DIR",
-                    help="also write the app icon (ic_moonlight.png) and the "
-                         "flat fallback banner (banner.png) to DIR")
+                    help="also write the app icon (ic_moonlight.png, from "
+                         "icon_art.png) and the flat fallback banner "
+                         "(banner.png, from banner_art.jpg) to DIR")
     ap.add_argument("--loop", type=float, metavar="SECONDS",
                     help="loop length (default %g)" % LOOP_SECONDS)
     ap.add_argument("--spin-deg", type=float, metavar="DEG",
@@ -845,8 +833,11 @@ def main():
     write_glb(roots, mats, glb)
     print("wrote", glb)
     if args.assets:
-        for name, im in (("ic_moonlight.png", logo_art.make_icon(48)),
-                         ("banner.png", logo_art.make_flat_banner())):
+        # Isaac's icon as is, and his banner picture as the flat banner
+        icon = Image.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon_art.png")).convert("RGBA")
+        flat = Image.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "banner_art.jpg")).convert("RGB")
+        flat = flat.resize((256, 128), Image.LANCZOS)
+        for name, im in (("ic_moonlight.png", icon), ("banner.png", flat)):
             p = os.path.join(args.assets, name)
             im.save(p)
             print("wrote", p)
