@@ -3,3 +3,4 @@ build/
 *.cia
 *.elf
 *.smdh
+__pycache__/

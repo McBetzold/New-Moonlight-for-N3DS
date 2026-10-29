@@ -1,24 +1,29 @@
-# 3D HOME Menu banner
+# Icon and 3D HOME Menu banner
 
-The banner shown on the top screen when Moonlight is selected in the HOME
-Menu is a 3D model in CGFX format (`3ds/res/banner.cgfx`), like the banners of
-retail games. bannertool packs it into the CIA when the Makefile's
-`BANNER_IMAGE` ends in `.cgfx`; with a `.png` it makes the old flat banner.
+The banner shown on the top screen when New Moonlight for N3DS is selected in
+the HOME Menu is a 3D model in CGFX format (`3ds/res/banner.cgfx`), like the
+banners of retail games. bannertool packs it into the CIA when the Makefile's
+`BANNER_IMAGE` ends in `.cgfx`; with a `.png` it uses the flat
+`3ds/res/banner.png` instead.
 
-`make_banner.py` builds the scene from code, so no 3D modelling program is
-needed: the eight-wedge Moonlight logo turning like a wheel in place, a glow
-behind it and the title, all popping out of the screen, in front of a night
-sky with twinkling stars from deep behind the screen to out in front of it.
-The top of the script lists the camera and the limits the scene is designed
-around.
+- `logo_art.py` draws the logo in pieces: the rainbow wheel, the silver "new"
+  with its coloured dashes, and "Moonlight / for N3DS" with the red M and 3.
+- `make_banner.py` builds the 3D scene from those pieces (no 3D modelling
+  program needed): the wheel spinning in place with "new" fixed in front of
+  it and the title beside it, all popping out of the screen, over a light
+  backdrop with coloured sparkles that twinkle at every depth. It also writes
+  the 48x48 app icon (`3ds/res/ic_moonlight.png`) and the flat banner. The
+  top of the script lists the camera and the limits the scene is designed
+  around.
 
 ## Rebuilding
 
-Requirements: Python 3.12+ with `pillow` and `gltflib`, and
-[pycgfx](https://github.com/skyfloogle/pycgfx) (commit `1f78850`).
+Requirements: Python 3.12+ with `pillow` and `gltflib`, the Segoe UI Black
+font (Windows), and [pycgfx](https://github.com/skyfloogle/pycgfx) (commit
+`1f78850`).
 
 ```sh
-python make_banner.py --preview      # writes banner.glb and banner-preview.png
+python make_banner.py --preview --assets ../res   # banner.glb, preview, icon, flat banner
 python path/to/pycgfx/main.py banner.glb ../res/banner.cgfx
 ```
 
@@ -26,4 +31,5 @@ python path/to/pycgfx/main.py banner.glb ../res/banner.cgfx
 that approximates the HOME Menu's lighting, which is enough to check the
 layout. The real banner must still be checked on a 3DS.
 
-pycgfx warns if the CGFX is over 512 KiB, the most the 3DS accepts.
+pycgfx warns if the CGFX is over 512 KiB, the most the 3DS accepts; the
+current banner is about 460 KB, so add texture sparingly.

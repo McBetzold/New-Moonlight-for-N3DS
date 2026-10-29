@@ -1,20 +1,21 @@
-"""Builds Moonlight's 3D HOME Menu banner as a glTF scene (banner.glb).
+"""Builds the 3D HOME Menu banner of New Moonlight for N3DS as a glTF scene
+(banner.glb), plus the app icon and the flat fallback banner.
 
 The scene is converted to CGFX with pycgfx (https://github.com/skyfloogle/pycgfx)
-and packed into the CIA by bannertool (see README.md next to this file).
+and packed into the CIA by bannertool (see README.md next to this file). The
+logo artwork itself is drawn by logo_art.py.
 
-    python make_banner.py [--out DIR] [--preview]
+    python make_banner.py [--out DIR] [--preview] [--assets DIR]
 
 Scene (glTF units, camera from pycgfx's banner-camera.gltf: position
 (0, 1, 44.786), looking down -Z, 30 degree vertical FOV, 5:3, near 26.5,
 so nothing may come closer than z = 18):
-  * a night-sky backdrop far behind everything (z = -16)
-  * twinkling stars from deep behind the screen (z = -14.5) to well in
-    front of it (z = 15), kept out of the logo and text areas
-  * the Moonlight logo: eight separate 3D wedges with real gaps, fixed in
-    place and turning like a wheel, popping out of the screen (z = 11)
-  * a soft glow just behind the logo
-  * "Moonlight" / "Game Streaming" popping out at z = 9
+  * a light backdrop far behind everything (z = -16)
+  * coloured sparkles that twinkle, from deep behind the screen (z = -12)
+    to well in front of it (z = 15), kept out of the logo and title areas
+  * the wheel (ring and spokes) spinning in place, out of the screen (z = 10)
+  * the silver "new" and its dashes, fixed, just in front of it (z = 11)
+  * "Moonlight / for N3DS", fixed, popping out at z = 9
   Things are placed by their top-screen pixel position and scaled with
   their depth, so moving something closer keeps its place on screen.
 
@@ -22,8 +23,9 @@ Animation notes (pycgfx limitations):
   * every rotation is stored as Euler angles, and the middle (Y) angle is
     limited to +-90 degrees, so an animated node must turn around one axis
     only (nest nodes for more)
-  * the logo looks the same after every 45 degrees, so spinning exactly 90
-    degrees per loop repeats seamlessly with no angle wrap
+  * an angle must not wrap past +-180 degrees between keys, so the wheel's
+    full turn per loop is split over two nested nodes of just under 180
+    degrees each
   * all animations share one loop, so every periodic motion completes a
     whole number of cycles in LOOP_SECONDS
   * translucent meshes are drawn in node order, so they are sorted back to
@@ -41,19 +43,17 @@ import random
 import struct
 import sys
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image
 
-LOOP_SECONDS = 6.0
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import logo_art  # noqa: E402
+
+LOOP_SECONDS = 12.0
 KEY_STEP = 0.125  # seconds between animation keys
 
 CAM_POS = (0.0, 1.0, 44.786)
 CAM_YFOV = 0.523599
 CAM_ASPECT = 5.0 / 3.0
-
-FONT_DIRS = [os.path.join(os.environ.get("WINDIR", "C:\\Windows"), "Fonts"),
-             "/usr/share/fonts/truetype/dejavu"]
-TITLE_FONTS = ["seguisb.ttf", "segoeuib.ttf", "DejaVuSans-Bold.ttf"]
-SUB_FONTS = ["segoeui.ttf", "DejaVuSans.ttf"]
 
 # ---------------------------------------------------------------------------
 # small vector / matrix helpers
@@ -138,40 +138,20 @@ def quantize_rgba4(im):
     return im
 
 
-def find_font(names, size):
-    for d in FONT_DIRS:
-        for n in names:
-            p = os.path.join(d, n)
-            if os.path.exists(p):
-                return ImageFont.truetype(p, size)
-    sys.exit("No usable font found (looked for %s)" % ", ".join(names))
-
-
-def lerp(a, b, t):
-    return a + (b - a) * t
-
 
 def make_backdrop():
+    """Light, slightly cool gradient with a soft glow behind the wheel."""
     w, h = 256, 128
     im = Image.new("RGB", (w, h))
     px = im.load()
-    top = (6, 9, 24)
-    bottom = (24, 40, 78)
-    rnd = random.Random(7)
+    top, bottom = (255, 255, 255), (206, 216, 230)
     for y in range(h):
-        t = (y / (h - 1)) ** 1.4
+        t = (y / (h - 1)) ** 1.3
         for x in range(w):
-            # soft bluish glow behind the logo (left third, a bit above centre)
-            dx, dy = (x - 70) / 90.0, (y - 58) / 60.0
+            dx, dy = (x - 66) / 80.0, (y - 62) / 56.0
             glow = max(0.0, 1.0 - math.sqrt(dx * dx + dy * dy)) ** 2
-            c = [lerp(top[i], bottom[i], t) + glow * (20, 34, 60)[i]
-                 for i in range(3)]
-            px[x, y] = tuple(int(min(255, v)) for v in c)
-    # faint far-away stars baked into the sky
-    for _ in range(70):
-        x, y = rnd.randrange(w), rnd.randrange(h - 20)
-        b = rnd.randrange(90, 200)
-        px[x, y] = (b, b, min(255, b + 30))
+            px[x, y] = tuple(int(min(255, top[i] + (bottom[i] - top[i]) * t
+                                     + glow * 40)) for i in range(3))
     return quantize_rgba4(im)
 
 
@@ -187,39 +167,23 @@ def make_radial(size, color, max_alpha, power):
     return im
 
 
-def make_star():
+
+def make_sparkle():
+    """White four-point sparkle; materials tint it with the logo colours."""
     size = 32
-    im = make_radial(size, (235, 240, 255), 1.0, 1.9)
+    im = make_radial(size, (255, 255, 255), 1.0, 2.2)
     px = im.load()
     c = size // 2
-    # four-point glint
     for i in range(size):
-        f = max(0.0, 1.0 - abs(i - c) / c) ** 3
+        f = max(0.0, 1.0 - abs(i - c) / c) ** 2.2
         for (x, y) in ((i, c), (c, i), (i, c - 1), (c - 1, i)):
             r, g, b, a = px[x, y]
             px[x, y] = (r, g, b, min(255, a + int(255 * f)))
     return quantize_rgba4(im)
 
 
-def make_text(text, w, h, font_names, color, shadow=True):
-    s = 4  # supersample
-    big = Image.new("RGBA", (w * s, h * s), (0, 0, 0, 0))
-    size = h * s
-    while True:
-        font = find_font(font_names, size)
-        box = font.getbbox(text)
-        if box[2] - box[0] <= w * s * 0.94 and box[3] - box[1] <= h * s * 0.80:
-            break
-        size -= 4
-    tw, th = box[2] - box[0], box[3] - box[1]
-    pos = ((w * s - tw) // 2 - box[0], (h * s - th) // 2 - box[1])
-    if shadow:
-        sh = Image.new("RGBA", big.size, (0, 0, 0, 0))
-        ImageDraw.Draw(sh).text((pos[0] + s * 2, pos[1] + s * 2), text,
-                                font=font, fill=(0, 0, 0, 170))
-        big = Image.alpha_composite(big, sh.filter(ImageFilter.GaussianBlur(s * 2)))
-    ImageDraw.Draw(big).text(pos, text, font=font, fill=color + (255,))
-    return quantize_rgba4(big.resize((w, h), Image.LANCZOS))
+def lerp(a, b, t):
+    return a + (b - a) * t
 
 
 # ---------------------------------------------------------------------------
@@ -251,55 +215,18 @@ def quad_mesh(w, h):
     return m
 
 
-def logo_mesh(radius, gap, depth, arc_steps=8):
-    """Eight wedges of a disc, separated by straight gaps of width `gap`."""
+def disc_mesh(radius, segments=48):
+    """A flat disc facing the viewer, textured edge to edge."""
     m = Mesh()
-    zf, zb = depth / 2, -depth / 2
-    half = math.pi / 8  # half of a 45 degree wedge
-    apex_dist = (gap / 2) / math.sin(half)
-    edge = math.asin((gap / 2) / radius)
-    for k in range(8):
-        mid = k * 2 * half + half
-        apex = (apex_dist * math.cos(mid), apex_dist * math.sin(mid))
-        a0, a1 = mid - half + edge, mid + half - edge
-        arc = [(radius * math.cos(a0 + (a1 - a0) * i / arc_steps),
-                radius * math.sin(a0 + (a1 - a0) * i / arc_steps))
-               for i in range(arc_steps + 1)]
-        # front and back faces (fans from the apex)
-        fa = m.vert((apex[0], apex[1], zf), (0, 0, 1))
-        fr = [m.vert((x, y, zf), (0, 0, 1)) for x, y in arc]
-        for i in range(arc_steps):
-            m.tri(fa, fr[i], fr[i + 1])
-        ba = m.vert((apex[0], apex[1], zb), (0, 0, -1))
-        br = [m.vert((x, y, zb), (0, 0, -1)) for x, y in arc]
-        for i in range(arc_steps):
-            m.tri(ba, br[i + 1], br[i])
-        # curved outer wall, smooth normals
-        for i in range(arc_steps):
-            (x0, y0), (x1, y1) = arc[i], arc[i + 1]
-            n0 = (x0 / radius, y0 / radius, 0)
-            n1 = (x1 / radius, y1 / radius, 0)
-            p = m.vert((x0, y0, zf), n0)
-            q = m.vert((x1, y1, zf), n1)
-            r = m.vert((x1, y1, zb), n1)
-            s = m.vert((x0, y0, zb), n0)
-            m.tri(p, s, r)
-            m.tri(p, r, q)
-        # the two straight walls along the gaps
-        for (ex, ey) in (arc[0], arc[-1]):
-            pts = [(apex[0], apex[1]), (ex, ey)]
-            if (ex, ey) == arc[-1]:
-                pts.reverse()
-            (x0, y0), (x1, y1) = pts
-            # the edge direction turned 90 degrees clockwise points out of
-            # the wedge, into the gap
-            n = v_norm((y1 - y0, x0 - x1, 0))
-            p = m.vert((x0, y0, zf), n)
-            q = m.vert((x1, y1, zf), n)
-            r = m.vert((x1, y1, zb), n)
-            s = m.vert((x0, y0, zb), n)
-            m.tri(p, r, q)
-            m.tri(p, s, r)
+    c = m.vert((0, 0, 0), (0, 0, 1), (0.5, 0.5))
+    rim = []
+    for i in range(segments):
+        a = 2 * math.pi * i / segments
+        x, y = math.cos(a), math.sin(a)
+        rim.append(m.vert((radius * x, radius * y, 0), (0, 0, 1),
+                          (0.5 + 0.5 * x, 0.5 - 0.5 * y)))
+    for i in range(segments):
+        m.tri(c, rim[i], rim[(i + 1) % segments])
     return m
 
 
@@ -340,6 +267,8 @@ class Material:
         return self.color_anim(time) if self.color_anim else self.color
 
 
+
+
 def screen_to_world(sx, sy, z):
     """World x, y at depth z for a point at screen position (sx, sy), both
     -1..1 from the left/bottom edge to the right/top edge."""
@@ -353,20 +282,21 @@ def world_per_pixel(z):
     return 2 * (CAM_POS[2] - z) * math.tan(CAM_YFOV / 2) / 240.0
 
 
-# Where things sit on the top screen (400x240 px) and how close they are.
-# Larger z = closer to the viewer = further out of the screen in 3D.
-LOGO_PX, LOGO_RADIUS_PX, LOGO_Z = (97, 116), 66, 11.0
-TITLE_PX, TITLE_W_PX, TITLE_Z = (292, 97), 178, 9.0
-SUB_PX, SUB_W_PX = (292, 139), 168
-HALO_Z = 9.5  # just behind the logo
-KEEP_CLEAR = [  # star-free areas: the logo and the text
-    ("circle", LOGO_PX, LOGO_RADIUS_PX + 12),
-    ("rect", (196, 66, 392, 156)),
-]
-
-
 def px_to_world(px, py, z):
     return screen_to_world(px / 200.0 - 1, 1 - py / 120.0, z)
+
+
+# Where things sit on the top screen (400x240 px) and how close they are.
+# Larger z = closer to the viewer = further out of the screen in 3D.
+WHEEL_PX, WHEEL_R_PX, WHEEL_Z = (102, 120), 90, 10.0
+BADGE_Z = 11.0
+TITLE_PX, TITLE_W_PX, TITLE_Z = (300, 120), 190, 9.0
+KEEP_CLEAR = [  # sparkle-free areas: the logo and the title
+    ("circle", WHEEL_PX, WHEEL_R_PX + 10),
+    ("rect", (202, 68, 398, 172)),
+]
+SPARKLE_COLORS = [(0.86, 0.16, 0.18), (0.59, 0.77, 0.17), (0.16, 0.63, 0.84),
+                  (0.14, 0.54, 0.61), (0.94, 0.74, 0.12), (0.84, 0.12, 0.51)]
 
 
 def build_scene():
@@ -379,39 +309,42 @@ def build_scene():
         return m
 
     # backdrop, far behind (opaque)
-    bd = mat("Sky", texture=make_backdrop(), roughness=1.0)
-    roots.append(Node("Sky", quad_mesh(56, 34), bd, t=(0, 1.0, -16)))
+    bd = mat("Backdrop", texture=make_backdrop(), roughness=1.0)
+    roots.append(Node("Backdrop", quad_mesh(56, 34), bd, t=(0, 1.0, -16)))
 
-    # the logo (opaque): fixed in place, out in front of the screen, turning
-    # like a wheel
-    logo_mat = mat("Logo", color=(0.95, 0.96, 1.0, 1.0), roughness=0.45)
-    k = world_per_pixel(LOGO_Z)
-    lx, ly = px_to_world(LOGO_PX[0], LOGO_PX[1], LOGO_Z)
-    radius = LOGO_RADIUS_PX * k
-    spin = Node("LogoSpin", logo_mesh(radius, radius * 0.09, radius * 0.23),
-                logo_mat, t=(lx, ly, LOGO_Z))
-    spin.anim["rotation"] = lambda tm: quat_axis(
-        (0, 0, 1), -math.radians(90) * tm / LOOP_SECONDS)
-    roots.append(spin)
+    # the wheel (opaque): one full turn per loop, split over two nested
+    # nodes so no angle passes 180 degrees
+    k = world_per_pixel(WHEEL_Z)
+    wx, wy = px_to_world(WHEEL_PX[0], WHEEL_PX[1], WHEEL_Z)
+    wheel_tex = logo_art.wheel(256)
+    wheel_mat = mat("Wheel", texture=quantize_rgba4(wheel_tex), roughness=1.0)
+    disc = disc_mesh(WHEEL_R_PX * k)
+    # logo_art draws the ring at 0.49 of the image: map the disc rim there
+    disc.uv = [(0.5 + (u - 0.5) * 0.98, 0.5 + (v - 0.5) * 0.98) for u, v in disc.uv]
+    spin_a = Node("WheelSpinA", t=(wx, wy, WHEEL_Z))
+    spin_a.anim["rotation"] = lambda tm: quat_axis(
+        (0, 0, 1), -math.radians(179.9) * tm / LOOP_SECONDS)
+    spin_b = spin_a.add(Node("WheelSpinB", disc, wheel_mat))
+    spin_b.anim["rotation"] = spin_a.anim["rotation"]
+    roots.append(spin_a)
 
     # translucent pieces, all sorted back to front below
     blended = []
 
-    # stars: every one twinkles; spread from deep behind the screen to well
-    # in front of it, but kept out of the logo and text areas
-    star_tex = make_star()
+    # sparkles in the logo colours, all twinkling, at every depth
+    sparkle = make_sparkle()
     twinklers = []
-    for i in range(8):
-        phase = i / 8.0
-        cycles = 1 + (i % 3)
+    for i in range(12):
+        color = SPARKLE_COLORS[i % 6]
+        phase = i / 12.0
+        cycles = 2 + (i % 3)
 
-        def anim(tm, phase=phase, cycles=cycles):
+        def anim(tm, phase=phase, cycles=cycles, color=color):
             s = 0.5 + 0.5 * math.sin(
                 2 * math.pi * (cycles * tm / LOOP_SECONDS + phase))
-            b = 0.12 + 0.88 * s * s
-            return (b, b, b, b)
-        twinklers.append(mat("Star%d" % i, texture=star_tex, blend=True,
-                             color_anim=anim))
+            return color + (0.08 + 0.92 * s * s,)
+        twinklers.append(mat("Sparkle%d" % i, color=color + (1.0,),
+                             texture=sparkle, blend=True, color_anim=anim))
 
     def clear(px, py, pad):
         for kind, a, *rest in KEEP_CLEAR:
@@ -422,51 +355,48 @@ def build_scene():
                 return False
         return True
 
-    rnd = random.Random(11)
+    rnd = random.Random(5)
     placed = []
     # (count, depth range, apparent size in px)
-    for count, (z0, z1), (s0, s1) in [(12, (-14.5, -9), (6, 9)),
-                                      (8, (-6, 2), (9, 13)),
-                                      (12, (4, 15), (13, 20))]:
-        n = 0
-        tries = 0
-        while n < count and tries < 2000:
+    for count, (z0, z1), (s0, s1) in [(12, (-12, -6), (8, 11)),
+                                      (8, (-4, 3), (10, 14)),
+                                      (12, (5, 15), (13, 19))]:
+        n = tries = 0
+        while n < count and tries < 3000:
             tries += 1
             px, py = rnd.uniform(8, 392), rnd.uniform(8, 232)
             size_px = rnd.uniform(s0, s1)
-            if not clear(px, py, size_px):
+            if not clear(px, py, size_px / 2):
                 continue
-            if any(math.hypot(px - qx, py - qy) < 26 for qx, qy in placed):
+            if any(math.hypot(px - qx, py - qy) < 24 for qx, qy in placed):
                 continue
             z = rnd.uniform(z0, z1)
             x, y = px_to_world(px, py, z)
             size = size_px * world_per_pixel(z)
             m = twinklers[len(placed) % len(twinklers)]
-            blended.append((z, Node("Star%02d" % len(placed),
+            blended.append((z, Node("Sparkle%02d" % len(placed),
                                     quad_mesh(size, size), m, t=(x, y, z))))
             placed.append((px, py))
             n += 1
 
-    halo = mat("Halo", texture=quantize_rgba4(
-        make_radial(64, (150, 190, 255), 0.42, 1.8)), blend=True)
-    hx, hy = px_to_world(LOGO_PX[0], LOGO_PX[1], HALO_Z)
-    hs = LOGO_RADIUS_PX * 3.1 * world_per_pixel(HALO_Z)
-    blended.append((HALO_Z, Node("Halo", quad_mesh(hs, hs), halo,
-                                 t=(hx, hy, HALO_Z))))
+    # "new" and its dashes, fixed in front of the spinning wheel (same layout
+    # as logo_art.logo_mark: 0.88 of the wheel image wide, centre 3% above)
+    img_px = WHEEL_R_PX / 0.49
+    kb = world_per_pixel(BADGE_Z)
+    bw_px = 0.88 * img_px
+    bx, by = px_to_world(WHEEL_PX[0], WHEEL_PX[1] - 0.03 * img_px, BADGE_Z)
+    badge = mat("Badge", texture=quantize_rgba4(logo_art.new_badge(256, 128)),
+                blend=True)
+    blended.append((BADGE_Z, Node("Badge", quad_mesh(bw_px * kb, bw_px * kb / 2),
+                                  badge, t=(bx, by, BADGE_Z))))
 
-    k = world_per_pixel(TITLE_Z)
-    title = mat("Title", texture=make_text("Moonlight", 256, 64, TITLE_FONTS,
-                                           (255, 255, 255)), blend=True)
+    kt = world_per_pixel(TITLE_Z)
     tx, ty = px_to_world(TITLE_PX[0], TITLE_PX[1], TITLE_Z)
-    blended.append((TITLE_Z, Node("Title", quad_mesh(TITLE_W_PX * k,
-                                                     TITLE_W_PX * k / 4), title,
-                                  t=(tx, ty, TITLE_Z))))
-    sub = mat("Subtitle", texture=make_text("Game Streaming", 256, 32, SUB_FONTS,
-                                            (178, 196, 228)), blend=True)
-    sx, sy = px_to_world(SUB_PX[0], SUB_PX[1], TITLE_Z)
-    blended.append((TITLE_Z, Node("Subtitle", quad_mesh(SUB_W_PX * k,
-                                                        SUB_W_PX * k / 8), sub,
-                                  t=(sx, sy, TITLE_Z))))
+    title = mat("Title", texture=quantize_rgba4(logo_art.title_block(256, 128)),
+                blend=True)
+    blended.append((TITLE_Z, Node("Title", quad_mesh(TITLE_W_PX * kt,
+                                                     TITLE_W_PX * kt / 2),
+                                  title, t=(tx, ty, TITLE_Z))))
 
     # pycgfx draws translucent meshes in node order: back to front
     blended.sort(key=lambda b: b[0])
@@ -700,11 +630,20 @@ def main():
     ap.add_argument("--out", default=os.path.dirname(os.path.abspath(__file__)))
     ap.add_argument("--preview", action="store_true",
                     help="also render preview frames (slow, pure Python)")
+    ap.add_argument("--assets", metavar="DIR",
+                    help="also write the app icon (ic_moonlight.png) and the "
+                         "flat fallback banner (banner.png) to DIR")
     args = ap.parse_args()
     roots, mats = build_scene()
     glb = os.path.join(args.out, "banner.glb")
     write_glb(roots, mats, glb)
     print("wrote", glb)
+    if args.assets:
+        for name, im in (("ic_moonlight.png", logo_art.make_icon(48)),
+                         ("banner.png", logo_art.make_flat_banner())):
+            p = os.path.join(args.assets, name)
+            im.save(p)
+            print("wrote", p)
     if args.preview:
         times = [0.0, LOOP_SECONDS * 0.25, LOOP_SECONDS * 0.5, LOOP_SECONDS * 0.75]
         frames = [render(roots, t) for t in times]
