@@ -39,11 +39,20 @@ are most of it, so keep them small.
 
 ## Status
 
-The Makefile currently uses the flat `3ds/res/banner.png`. The 3D banners
-from commit fb0064e on froze or crashed the HOME Menu (a data abort in the
-`menu` process) as soon as the app was selected, even at the size of the
-banners that worked (f2817e8 and 53862c7). Those two had a single turning
-node, a 6 second loop and no disc mesh; the failing ones added a textured
-disc, two nested turning nodes of nearly 180 degrees each, a 12 second
-loop, and in places an alpha-tested or blended wheel. Change one thing at
-a time from 53862c7 to find the cause.
+Works on the 3DS since test 10 (cb594a2): the banner stays still while
+Isaac's wheel turns in place, once per 20 s, and the stars twinkle in depth.
+It follows the structure of banners proven on the HOME Menu (GabeSud0's
+pokeplatinum-3ds, credited in `convert.py`): an `autorotate` bone that
+cancels the HOME Menu's own spin, screen-facing billboards for the flat
+cards, and no material animations.
+
+Learnt on the way (each cost a frozen or crashed HOME Menu):
+
+- Keep `banner.cgfx` near 230 KB; a 458 KB one froze the 3DS.
+- No two textures of the same pixel size (`check_texture_sizes()`).
+- No large see-through cards in the middle of the scene.
+- Change one thing at a time. Tests 8 and 9 froze with 13 newly placed
+  stars and worked again with test 7's 14 (`STARS`); why is not known, so
+  move or add stars carefully.
+- The HOME Menu remembers a title's banner: delete the title in FBI before
+  installing a new banner.
