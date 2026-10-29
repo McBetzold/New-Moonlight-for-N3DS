@@ -11,34 +11,30 @@ Scene (glTF units, camera from pycgfx's banner-camera.gltf: position
 (0, 1, 44.786), looking down -Z, 30 degree vertical FOV, 5:3, near 26.5,
 so nothing may come closer than z = 18):
   * a night-sky backdrop far behind everything (z = -16)
-  * 23 stars that twinkle, from deep behind the screen (z = -12) to well in
+  * 14 stars that twinkle, from deep behind the screen (z = -12) to well in
     front of it (z = 15), kept out of the logo and title areas
-  * the wheel (Isaac's artwork, wheel_art.jpg, with the gaps between the
-    spokes cut out) spinning in place out of the screen (z = 10)
-  * the silver "new" and its dashes, fixed, just in front of it (z = 11)
-  * "Moonlight / for N3DS", fixed, popping out at z = 9
+  * the wheel out of the screen (z = 10): Isaac's ring (wheel_art.jpg, ring
+    only) standing still, with spokes that turn by flipbook
+  * the silver "new" and its dashes just in front of it (z = 11)
+  * "Moonlight / for N3DS" popping out at z = 9
   Things are placed by their top-screen pixel position and scaled with
   their depth, so moving something closer keeps its place on screen.
 
-Animation notes (pycgfx limitations):
-  * every rotation is stored as Euler angles, and the middle (Y) angle is
-    limited to +-90 degrees, so an animated node must turn around one axis
-    only (nest nodes for more)
-  * an angle must not wrap past +-180 degrees between keys, so the wheel's
-    full turn per loop is split over two nested nodes of just under 180
-    degrees each
-  * a turning node carries no position of its own: the wheel's position is
-    on a parent whose position animation just holds still, so it cannot
-    drift whatever the HOME Menu does with channels an animation leaves out
-  * pycgfx moves every part without a BLEND mesh ahead of the BLEND ones.
-    A banner that needed that reordering (an unanimated empty node among
-    the BLEND meshes) crashed the HOME Menu with a data abort, so the
-    script keeps the nodes in that order itself (check_node_order). The
-    wheel's see-through gaps use an alpha test (MASK), not BLEND, for this
+Animation notes (what the 3DS HOME Menu actually does):
+  * NO NODE (BONE) ANIMATION. On the 3DS any animated node turned the whole
+    banner about a vertical axis, so it spun like a turntable and vanished
+    while facing away, whatever node the animation was meant for. Nothing in
+    the scene moves; everything is placed with static positions.
+  * Material colour animation works (KHR_animation_pointer on
+    baseColorFactor): the stars twinkle with it, and the spokes turn by
+    flipbook with it (SPOKE_FRAMES copies, each turned a little further,
+    fading in and out in turn, with their own key times).
   * all animations share one loop, so every periodic motion completes a
     whole number of cycles in LOOP_SECONDS
   * translucent meshes are drawn in node order, so they are sorted back to
-    front by depth
+    front by depth, and pycgfx moves every part without a BLEND mesh ahead
+    of the BLEND ones; a banner that needed that reordering crashed the
+    HOME Menu, so check_node_order() refuses such a scene
   * the HOME Menu light shines straight into the screen and there is no
     ambient light: faces turned away from the viewer go dark
 
@@ -68,9 +64,10 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import logo_art  # noqa: E402
 
-LOOP_SECONDS = 12.0
-# how far each of the two nested wheel nodes turns per loop (they add up)
-SPIN_DEG_PER_NODE = 179.9
+LOOP_SECONDS = 6.0
+# spoke flipbook: frames per 45 degrees, and seconds per 45 degrees
+SPOKE_FRAMES = 6
+SPOKE_CYCLE = 1.0
 # parts to leave out (for finding what the HOME Menu chokes on)
 OMIT = set()
 KEY_STEP = 0.25  # seconds between animation keys (fewer keys = smaller banner)
@@ -151,12 +148,12 @@ def mat_dir(m, d):
 BAYER4 = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
 
 
-def quantize_rgba4(im):
+def quantize_rgba4(im, dither=True):
     im = im.convert("RGBA")
     px = im.load()
     for y in range(im.height):
         for x in range(im.width):
-            d = (BAYER4[y & 3][x & 3] + 0.5) / 16.0
+            d = (BAYER4[y & 3][x & 3] + 0.5) / 16.0 if dither else 0.5
             px[x, y] = tuple(
                 min(15, int(c / 255.0 * 15 + d)) * 17 for c in px[x, y])
     return im
@@ -166,7 +163,7 @@ def quantize_rgba4(im):
 def make_backdrop():
     """Night sky: deep navy at the top to dark blue at the bottom, with a
     faint glow behind the wheel."""
-    w, h = 128, 64  # a smooth gradient: low resolution is enough
+    w, h = 64, 32  # a smooth gradient: low resolution is enough
     im = Image.new("RGB", (w, h))
     px = im.load()
     top, bottom = (5, 8, 22), (22, 36, 72)
@@ -177,7 +174,9 @@ def make_backdrop():
             glow = max(0.0, 1.0 - math.sqrt(dx * dx + dy * dy)) ** 2
             px[x, y] = tuple(int(min(255, top[i] + (bottom[i] - top[i]) * t
                                      + glow * (18, 28, 52)[i])) for i in range(3))
-    return quantize_rgba4(im)
+    # no dither: on a texture this small the dots would show as blocks; the
+    # GPU's bilinear filtering smooths the 16-level steps instead
+    return quantize_rgba4(im, dither=False)
 
 
 def make_radial(size, color, max_alpha, power):
@@ -240,6 +239,45 @@ def quad_mesh(w, h):
     return m
 
 
+def spokes_mesh(radius, angle_deg):
+    """Eight spokes as thin quads from the centre to under the ring, turned
+    by angle_deg. v runs along a spoke (0 at the centre), u across it."""
+    m = Mesh()
+    length = radius * (logo_art.SPOKE_END + 0.02)
+    half = radius * logo_art.SPOKE_WIDTH / 2
+    for i in range(8):
+        a = math.radians(angle_deg + 45 * i + 90)
+        dx, dy = math.cos(a), math.sin(a)      # along the spoke
+        nx, ny = -dy, dx                       # across it
+        p = [(nx * half * s_ + dx * l, ny * half * s_ + dy * l, 0)
+             for s_, l in ((-1, 0), (1, 0), (1, length), (-1, length))]
+        uv = [(0, 0), (1, 0), (1, 1), (0, 1)]
+        idx = [m.vert(p[j], (0, 0, 1), uv[j]) for j in range(4)]
+        # counter-clockwise as seen from the camera (front facing)
+        m.tri(idx[0], idx[2], idx[1])
+        m.tri(idx[0], idx[3], idx[2])
+    return m
+
+
+def make_spoke_texture():
+    """16x64: across the spoke a grey outline and a white middle; along it
+    bright white at the hub to a soft silver-blue at the ring."""
+    w, h = 16, 64
+    im = Image.new("RGBA", (w, h))
+    px = im.load()
+    for y in range(h):
+        t = y / (h - 1)                         # 0 at the hub, 1 at the ring
+        inner = tuple(int(255 + (c - 255) * t) for c in (196, 212, 236))
+        for x in range(w):
+            edge = abs((x + 0.5) / w - 0.5) * 2  # 0 middle .. 1 edge
+            if edge > 0.8:
+                c = (120, 124, 132)
+            else:
+                c = inner
+            px[x, y] = c + (255,)
+    return quantize_rgba4(im)
+
+
 def disc_mesh(radius, segments=48):
     """A flat disc facing the viewer, textured edge to edge."""
     m = Mesh()
@@ -288,6 +326,7 @@ class Material:
         self.name, self.color, self.texture = name, color, texture
         self.roughness, self.blend, self.color_anim = roughness, blend, color_anim
         self.mask = mask  # alpha test cut-out: drawn with the opaque meshes
+        self.anim_times = None  # own key times for color_anim (else shared)
 
     def color_at(self, time):
         return self.color_anim(time) if self.color_anim else self.color
@@ -342,27 +381,56 @@ def build_scene():
     # translucent pieces, all sorted back to front below
     blended = []
 
-    # the wheel: Isaac's artwork with the gaps between the spokes cut out
-    # (alpha test, so it is drawn with the opaque meshes). Laid out like the
-    # first banner, which worked on the 3DS: a parent node whose position
-    # is animated (here it just holds still), with the turning nodes inside
-    # it at zero, so the wheel can only turn about its own centre. One full
-    # turn per loop is split over the two nodes so no angle passes 180.
+    # the wheel. Nothing in the banner moves through space: on the 3DS any
+    # node (bone) animation turned the WHOLE banner about a vertical axis.
+    # The ring is Isaac's artwork (ring only), standing still. The spokes
+    # turn by flipbook: SPOKE_FRAMES copies, each turned a little further,
+    # fade in and out one after another (material colour animation, which
+    # the HOME Menu plays correctly). Eight spokes look the same every 45
+    # degrees, so the frames cover 45 degrees and repeat seamlessly.
     k = world_per_pixel(WHEEL_Z)
     wx, wy = px_to_world(WHEEL_PX[0], WHEEL_PX[1], WHEEL_Z)
-    wheel_tex = logo_art.wheel_art(128)  # small textures: see BANNER BUDGET
-    wheel_mat = mat("Wheel", texture=quantize_rgba4(wheel_tex), mask=True)
-    disc = disc_mesh(WHEEL_R_PX * k)
+    radius = WHEEL_R_PX * k
+    ring_tex = logo_art.wheel_art(128, ring_only=True)  # small: see BANNER BUDGET
+    ring_mat = mat("Ring", texture=quantize_rgba4(ring_tex), mask=True)
+    ring = disc_mesh(radius)
     # logo_art frames the ring edge at 0.49 of the image: map the disc rim there
-    disc.uv = [(0.5 + (u - 0.5) * 0.98, 0.5 + (v - 0.5) * 0.98) for u, v in disc.uv]
-    wheel_pos = Node("WheelPosition", t=(wx, wy, WHEEL_Z))
-    wheel_pos.anim["translation"] = lambda tm: (wx, wy, WHEEL_Z)
-    spin_a = wheel_pos.add(Node("WheelSpinA"))
-    spin_a.anim["rotation"] = lambda tm: quat_axis(
-        (0, 0, 1), -math.radians(SPIN_DEG_PER_NODE) * tm / LOOP_SECONDS)
-    spin_b = spin_a.add(Node("WheelSpinB", disc, wheel_mat))
-    spin_b.anim["rotation"] = spin_a.anim["rotation"]
-    roots.append(wheel_pos)
+    ring.uv = [(0.5 + (u - 0.5) * 0.98, 0.5 + (v - 0.5) * 0.98) for u, v in ring.uv]
+    roots.append(Node("Ring", ring, ring_mat, t=(wx, wy, WHEEL_Z)))
+
+    spoke_tex = make_spoke_texture()
+    frame_len = SPOKE_CYCLE / SPOKE_FRAMES
+    fade = frame_len / 3
+    for f in range(SPOKE_FRAMES):
+        start = f * frame_len
+
+        def alpha(tm, start=start):
+            # trapezoid: fade in around `start`, out around `start + frame_len`
+            x = (tm - start + fade / 2) % SPOKE_CYCLE
+            if x < fade:
+                return x / fade
+            if x < frame_len:
+                return 1.0
+            if x < frame_len + fade:
+                return 1.0 - (x - frame_len) / fade
+            return 0.0
+        m = mat("Spokes%d" % f, texture=spoke_tex, blend=True,
+                color_anim=lambda tm, alpha=alpha: (1.0, 1.0, 1.0, alpha(tm)))
+        # keys exactly at the corners of the trapezoid in every cycle
+        keys = {0.0, LOOP_SECONDS}
+        c = 0.0
+        while c < LOOP_SECONDS + SPOKE_CYCLE:
+            for off in (-fade / 2, fade / 2, frame_len - fade / 2,
+                        frame_len + fade / 2):
+                t = c + start + off
+                if 0.0 <= t <= LOOP_SECONDS:
+                    keys.add(round(t, 6))
+            c += SPOKE_CYCLE
+        m.anim_times = sorted(keys)
+        angle = -45.0 * f / SPOKE_FRAMES  # clockwise
+        blended.append((WHEEL_Z - 0.05,
+                        Node("Spokes%d" % f, spokes_mesh(radius, angle), m,
+                             t=(wx, wy, WHEEL_Z - 0.05))))
 
     # (no glow behind the wheel: its 32x32 texture matched the star's size,
     # see check_texture_sizes)
@@ -397,9 +465,9 @@ def build_scene():
     rnd = random.Random(5)
     placed = []
     # (count, depth range, apparent size in px)
-    for count, (z0, z1), (s0, s1) in [(9, (-12, -6), (8, 11)),
-                                      (6, (-4, 3), (10, 14)),
-                                      (8, (5, 15), (13, 19))]:
+    for count, (z0, z1), (s0, s1) in [(5, (-12, -6), (8, 11)),
+                                      (4, (-4, 3), (10, 14)),
+                                      (5, (5, 15), (13, 19))]:
         n = tries = 0
         while n < count and tries < 3000:
             tries += 1
@@ -441,9 +509,9 @@ def build_scene():
     blended.sort(key=lambda b: b[0])
     roots += [n for _, n in blended]
     if OMIT:
-        prefixes = {"wheel": "WheelPosition", "halo": "Halo", "stars": "Sparkle",
+        prefixes = {"wheel": ("Ring", "Spokes"), "halo": "Halo", "stars": "Sparkle",
                     "badge": "Badge", "title": "Title", "backdrop": "Backdrop"}
-        drop = tuple(prefixes[o] for o in OMIT)
+        drop = tuple(x for o in OMIT for x in (prefixes[o] if isinstance(prefixes[o], tuple) else (prefixes[o],)))
         roots = [n for n in roots if not n.name.startswith(drop)]
         used = set()
         stack = list(roots)
@@ -590,9 +658,15 @@ def write_glb(roots, mats, path):
                                      "target": {"node": node_id, "path": p}})
     for name, m in mats.items():
         if m.color_anim:
-            vals = [tuple(m.color_anim(t)) for t in times]
+            m_times, m_acc = times, time_acc
+            if m.anim_times:
+                m_times = m.anim_times
+                m_acc = add_accessor(m_times, 1, target=None)
+                accessors[m_acc]["min"] = [m_times[0]]
+                accessors[m_acc]["max"] = [m_times[-1]]
+            vals = [tuple(m.color_anim(t)) for t in m_times]
             out = add_accessor(vals, 4, target=None)
-            anim["samplers"].append({"input": time_acc, "output": out,
+            anim["samplers"].append({"input": m_acc, "output": out,
                                      "interpolation": "LINEAR"})
             anim["channels"].append({
                 "sampler": len(anim["samplers"]) - 1,
@@ -715,7 +789,7 @@ def render(roots, time, w=400, h=240):
 
 
 def main():
-    global LOOP_SECONDS, SPIN_DEG_PER_NODE
+    global LOOP_SECONDS
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", default=os.path.dirname(os.path.abspath(__file__)))
     ap.add_argument("--preview", action="store_true",
@@ -725,9 +799,6 @@ def main():
                          "flat fallback banner (banner.png) to DIR")
     ap.add_argument("--loop", type=float, metavar="SECONDS",
                     help="loop length (default %g)" % LOOP_SECONDS)
-    ap.add_argument("--spin-deg", type=float, metavar="DEG",
-                    help="turn of each of the two wheel nodes per loop "
-                         "(default %g)" % SPIN_DEG_PER_NODE)
     ap.add_argument("--omit", default="", metavar="PARTS",
                     help="comma-separated parts to leave out: wheel, halo, "
                          "stars, badge, title, backdrop")
@@ -735,8 +806,6 @@ def main():
     OMIT.update(p for p in args.omit.split(",") if p)
     if args.loop:
         LOOP_SECONDS = args.loop
-    if args.spin_deg is not None:
-        SPIN_DEG_PER_NODE = args.spin_deg
     roots, mats = build_scene()
     glb = os.path.join(args.out, "banner.glb")
     write_glb(roots, mats, glb)
