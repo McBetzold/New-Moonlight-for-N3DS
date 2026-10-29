@@ -203,9 +203,61 @@ def title_block(width, height, ss=2):
     return im.resize((width, height), Image.LANCZOS)
 
 
+# Isaac's wheel artwork (1024x1024): eight spokes and a rainbow ring on
+# white. Measured: centre (511.5, 511.5), ring from radius 402 to 444.5
+# (outlines included), spokes 42 px wide, meeting in a light hub.
+WHEEL_ART = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         "wheel_art.jpg")
+_ART_C, _RING_IN, _RING_OUT, _SPOKE_HALF, _HUB = 511.5, 401.0, 445.5, 21.5, 34.0
+
+
+_wheel_art_cache = None
+
+
+def wheel_art(size):
+    """The artwork wheel with everything but the ring and spokes made
+    transparent, framed like wheel() (ring edge at 0.49 of the image)."""
+    global _wheel_art_cache
+    if _wheel_art_cache is None:
+        _wheel_art_cache = _cut_out_wheel()
+    return _wheel_art_cache.resize((size, size), Image.LANCZOS)
+
+
+def _cut_out_wheel():
+    src = Image.open(WHEEL_ART).convert("RGB")
+    n = src.width
+    mask = Image.new("L", (n, n))
+    mp = mask.load()
+    spokes = [(math.cos(math.radians(a)), math.sin(math.radians(a)))
+              for a in range(0, 180, 45)]  # each line covers both directions
+    for y in range(n):
+        dy = y - _ART_C
+        for x in range(n):
+            dx = x - _ART_C
+            r = math.hypot(dx, dy)
+            # coverage with a one-pixel soft edge
+            cov = 0.0
+            if r <= _RING_OUT + 0.5:
+                edge_out = min(1.0, _RING_OUT + 0.5 - r)
+                ring = min(edge_out, max(0.0, min(1.0, r - _RING_IN + 0.5)))
+                spoke = 0.0
+                for (cx, cy) in spokes:
+                    across = abs(dx * cy - dy * cx)
+                    spoke = max(spoke, min(1.0, max(0.0, _SPOKE_HALF + 0.5 - across)))
+                hub = max(0.0, min(1.0, _HUB + 0.5 - r))
+                cov = max(ring, min(edge_out, max(spoke, hub)))
+            mp[x, y] = int(255 * cov)
+    im = src.convert("RGBA")
+    im.putalpha(mask)
+    half = (_RING_OUT + 0.5) / 0.98
+    box = tuple(int(round(v)) for v in (_ART_C - half, _ART_C - half,
+                                        _ART_C + half, _ART_C + half))
+    return im.crop(box)
+
+
 def logo_mark(size):
     """Wheel with the "new" badge on top (the icon artwork)."""
-    im = wheel(size)
+    im = wheel_art(size)
     bw = int(size * 0.88)
     bh = int(bw / 2)
     badge = new_badge(bw, bh)

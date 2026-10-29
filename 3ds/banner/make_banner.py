@@ -10,10 +10,12 @@ logo artwork itself is drawn by logo_art.py.
 Scene (glTF units, camera from pycgfx's banner-camera.gltf: position
 (0, 1, 44.786), looking down -Z, 30 degree vertical FOV, 5:3, near 26.5,
 so nothing may come closer than z = 18):
-  * a light backdrop far behind everything (z = -16)
-  * 25 coloured sparkles that twinkle, from deep behind the screen (z = -12)
-    to well in front of it (z = 15), kept out of the logo and title areas
-  * the wheel (ring and spokes) spinning in place, out of the screen (z = 10)
+  * a night-sky backdrop far behind everything (z = -16)
+  * 23 stars that twinkle, from deep behind the screen (z = -12) to well in
+    front of it (z = 15), kept out of the logo and title areas
+  * the wheel (Isaac's artwork, wheel_art.jpg, with the gaps between the
+    spokes see-through) spinning in place out of the screen (z = 10), with
+    a soft glow behind it
   * the silver "new" and its dashes, fixed, just in front of it (z = 11)
   * "Moonlight / for N3DS", fixed, popping out at z = 9
   Things are placed by their top-screen pixel position and scaled with
@@ -26,6 +28,9 @@ Animation notes (pycgfx limitations):
   * an angle must not wrap past +-180 degrees between keys, so the wheel's
     full turn per loop is split over two nested nodes of just under 180
     degrees each
+  * an animated node carries no position of its own: the wheel's position
+    is on an unanimated parent, so it cannot drift whatever the HOME Menu
+    does with the channels an animation leaves out
   * all animations share one loop, so every periodic motion completes a
     whole number of cycles in LOOP_SECONDS
   * translucent meshes are drawn in node order, so they are sorted back to
@@ -147,18 +152,19 @@ def quantize_rgba4(im):
 
 
 def make_backdrop():
-    """Light, slightly cool gradient with a soft glow behind the wheel."""
+    """Night sky: deep navy at the top to dark blue at the bottom, with a
+    faint glow behind the wheel."""
     w, h = 128, 64  # a smooth gradient: low resolution is enough
     im = Image.new("RGB", (w, h))
     px = im.load()
-    top, bottom = (255, 255, 255), (206, 216, 230)
+    top, bottom = (5, 8, 22), (22, 36, 72)
     for y in range(h):
-        t = (y / (h - 1)) ** 1.3
+        t = (y / (h - 1)) ** 1.4
         for x in range(w):
-            dx, dy = (x - 0.26 * w) / (0.31 * w), (y - 0.48 * h) / (0.44 * h)
+            dx, dy = (x - 0.26 * w) / (0.33 * w), (y - 0.48 * h) / (0.46 * h)
             glow = max(0.0, 1.0 - math.sqrt(dx * dx + dy * dy)) ** 2
             px[x, y] = tuple(int(min(255, top[i] + (bottom[i] - top[i]) * t
-                                     + glow * 40)) for i in range(3))
+                                     + glow * (18, 28, 52)[i])) for i in range(3))
     return quantize_rgba4(im)
 
 
@@ -302,8 +308,9 @@ KEEP_CLEAR = [  # sparkle-free areas: the logo and the title
     ("circle", WHEEL_PX, WHEEL_R_PX + 10),
     ("rect", (202, 68, 398, 172)),
 ]
-SPARKLE_COLORS = [(0.86, 0.16, 0.18), (0.59, 0.77, 0.17), (0.16, 0.63, 0.84),
-                  (0.14, 0.54, 0.61), (0.94, 0.74, 0.12), (0.84, 0.12, 0.51)]
+# star tints: mostly white, some faintly blue or warm
+SPARKLE_COLORS = [(1.0, 1.0, 1.0), (0.82, 0.9, 1.0), (1.0, 0.95, 0.82),
+                  (1.0, 1.0, 1.0), (0.78, 0.86, 1.0), (1.0, 0.92, 0.88)]
 
 
 def build_scene():
@@ -319,26 +326,38 @@ def build_scene():
     bd = mat("Backdrop", texture=make_backdrop(), roughness=1.0)
     roots.append(Node("Backdrop", quad_mesh(56, 34), bd, t=(0, 1.0, -16)))
 
-    # the wheel (opaque): one full turn per loop, split over two nested
-    # nodes so no angle passes 180 degrees
+    # translucent pieces, all sorted back to front below
+    blended = []
+
+    # the wheel: Isaac's artwork with the gaps between the spokes see-through.
+    # Its position is on a node that is never animated, and the two spinning
+    # nodes inside it sit at zero, so the wheel turns about its own centre
+    # however the HOME Menu treats the channels an animation leaves out. One
+    # full turn per loop is split over the two nodes so no angle passes 180.
     k = world_per_pixel(WHEEL_Z)
     wx, wy = px_to_world(WHEEL_PX[0], WHEEL_PX[1], WHEEL_Z)
-    wheel_tex = logo_art.wheel(128)  # small textures: see BANNER BUDGET
-    wheel_mat = mat("Wheel", texture=quantize_rgba4(wheel_tex), roughness=1.0)
+    wheel_tex = logo_art.wheel_art(128)  # small textures: see BANNER BUDGET
+    wheel_mat = mat("Wheel", texture=quantize_rgba4(wheel_tex), blend=True)
     disc = disc_mesh(WHEEL_R_PX * k)
-    # logo_art draws the ring at 0.49 of the image: map the disc rim there
+    # logo_art frames the ring edge at 0.49 of the image: map the disc rim there
     disc.uv = [(0.5 + (u - 0.5) * 0.98, 0.5 + (v - 0.5) * 0.98) for u, v in disc.uv]
-    spin_a = Node("WheelSpinA", t=(wx, wy, WHEEL_Z))
+    wheel_pos = Node("WheelPosition", t=(wx, wy, WHEEL_Z))
+    spin_a = wheel_pos.add(Node("WheelSpinA"))
     spin_a.anim["rotation"] = lambda tm: quat_axis(
         (0, 0, 1), -math.radians(179.9) * tm / LOOP_SECONDS)
     spin_b = spin_a.add(Node("WheelSpinB", disc, wheel_mat))
     spin_b.anim["rotation"] = spin_a.anim["rotation"]
-    roots.append(spin_a)
+    blended.append((WHEEL_Z, wheel_pos))
 
-    # translucent pieces, all sorted back to front below
-    blended = []
+    # a soft glow just behind the wheel, so it stands out from the sky
+    halo = mat("Halo", texture=quantize_rgba4(
+        make_radial(32, (150, 185, 255), 0.5, 1.6)), blend=True)
+    hx, hy = px_to_world(WHEEL_PX[0], WHEEL_PX[1], WHEEL_Z - 0.8)
+    hs = WHEEL_R_PX * 2.7 * world_per_pixel(WHEEL_Z - 0.8)
+    blended.append((WHEEL_Z - 0.8, Node("Halo", quad_mesh(hs, hs), halo,
+                                        t=(hx, hy, WHEEL_Z - 0.8))))
 
-    # sparkles in the logo colours, all twinkling, at every depth
+    # stars, all twinkling, from deep in the sky to out in front of the screen
     sparkle = make_sparkle()
     twinklers = []
     for i in range(len(SPARKLE_COLORS)):
@@ -367,7 +386,7 @@ def build_scene():
     # (count, depth range, apparent size in px)
     for count, (z0, z1), (s0, s1) in [(9, (-12, -6), (8, 11)),
                                       (6, (-4, 3), (10, 14)),
-                                      (10, (5, 15), (13, 19))]:
+                                      (8, (5, 15), (13, 19))]:
         n = tries = 0
         while n < count and tries < 3000:
             tries += 1

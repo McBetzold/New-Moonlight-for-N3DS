@@ -6,15 +6,16 @@ banners of retail games. bannertool packs it into the CIA when the Makefile's
 `BANNER_IMAGE` ends in `.cgfx`; with a `.png` it uses the flat
 `3ds/res/banner.png` instead.
 
-- `logo_art.py` draws the logo in pieces: the rainbow wheel, the silver "new"
-  with its coloured dashes, and "Moonlight / for N3DS" with the red M and 3.
+- `logo_art.py` draws the logo in pieces: the wheel (cut out of
+  `wheel_art.jpg`), the silver "new" with its coloured dashes, and
+  "Moonlight / for N3DS" with the red M and 3.
 - `make_banner.py` builds the 3D scene from those pieces (no 3D modelling
-  program needed): the wheel spinning in place with "new" fixed in front of
-  it and the title beside it, all popping out of the screen, over a light
-  backdrop with coloured sparkles that twinkle at every depth. It also writes
-  the 48x48 app icon (`3ds/res/ic_moonlight.png`) and the flat banner. The
-  top of the script lists the camera and the limits the scene is designed
-  around.
+  program needed): Isaac's wheel (`wheel_art.jpg`, with the gaps between the
+  spokes made see-through) spinning in place with "new" fixed in front of it
+  and the title beside it, all popping out of the screen, over a night sky
+  with stars that twinkle at every depth. It also writes the 48x48 app icon
+  (`3ds/res/ic_moonlight.png`) and the flat banner. The top of the script
+  lists the camera and the limits the scene is designed around.
 
 ## Rebuilding
 
