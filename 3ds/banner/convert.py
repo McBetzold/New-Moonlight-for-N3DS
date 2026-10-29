@@ -35,7 +35,7 @@ import os
 import sys
 
 CGFX_LIMIT = 0x80000          # the HOME Menu's limit for a banner's CGFX
-BILLBOARDS = ("backdrop", "badge", "title")
+BILLBOARDS = ("backdrop", "badge", "title", "title2")
 SPIN_NODE = "wheelspin"
 AUTOROTATE = "autorotate"
 

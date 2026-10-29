@@ -187,6 +187,67 @@ def new_badge(width, height, ss=4):
     return im.resize((width, height), Image.LANCZOS)
 
 
+# rainbow outline colours, red through magenta, one per letter in turn
+RAINBOW = [(222, 62, 52), (238, 128, 40), (236, 192, 40), (140, 196, 60),
+           (60, 178, 150), (52, 150, 214), (92, 110, 210), (150, 92, 200),
+           (206, 72, 168)]
+EDGE_DARK = (24, 22, 40)
+
+
+def rainbow_text(text, height_px, red_fill=(), ss=4):
+    """Silver letters, each outlined in the next rainbow colour (red to
+    magenta), with a thin dark edge outside the outline so they read on a
+    dark background; letters in red_fill are filled red (the 3 of N3DS)."""
+    size = int(height_px * ss * 1.32)
+    font = find_font(size)
+    colour_w = max(1, int(size * 0.055))
+    dark_w = colour_w + max(1, int(size * 0.025))
+    widths = [font.getlength(text[:i]) for i in range(len(text) + 1)]
+    asc, desc = font.getmetrics()
+    W = int(widths[-1] + 4 * dark_w)
+    H = asc + desc + 4 * dark_w
+    ox, oy = 2 * dark_w, 2 * dark_w
+    letters = [i for i, ch in enumerate(text) if ch != " "]
+    out = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+
+    def layer(i, stroke, colour):
+        m = Image.new("L", (W, H))
+        ImageDraw.Draw(m).text((ox + widths[i], oy), text[i], font=font,
+                               fill=255, stroke_width=stroke, stroke_fill=255)
+        c = Image.new("RGBA", (W, H), colour + (255,))
+        c.putalpha(m)
+        return c
+
+    for i in letters:                       # dark edge under everything
+        out = Image.alpha_composite(out, layer(i, dark_w, EDGE_DARK))
+    for n, i in enumerate(letters):         # rainbow outlines
+        col = RAINBOW[min(len(RAINBOW) - 1, n * len(RAINBOW) // len(letters))]
+        if i in red_fill:
+            col = (120, 16, 16)
+        out = Image.alpha_composite(out, layer(i, colour_w, col))
+    cap = font.getbbox("M")
+    band = (oy + cap[1], oy + cap[3])
+    for i in letters:                       # silver (or red) fill
+        m = Image.new("L", (W, H))
+        ImageDraw.Draw(m).text((ox + widths[i], oy), text[i], font=font, fill=255)
+        out = Image.alpha_composite(
+            out, _gradient_fill(m, band, RED if i in red_fill else SILVER))
+    out = out.crop(out.getbbox())
+    return out.resize((max(1, out.width // ss), max(1, out.height // ss)),
+                      Image.LANCZOS)
+
+
+def text_card(img, width, height, align="left"):
+    """img scaled to fit width x height (keeping its shape), on transparent."""
+    s = min(width * 0.97 / img.width, height * 0.92 / img.height)
+    img = img.resize((max(1, int(img.width * s)), max(1, int(img.height * s))),
+                     Image.LANCZOS)
+    card = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    x = int(width * 0.015) if align == "left" else (width - img.width) // 2
+    card.alpha_composite(img, (x, (height - img.height) // 2))
+    return card
+
+
 def title_block(width, height, ss=2):
     """"Moonlight" over "for N3DS", left aligned, on transparent."""
     W, H = width * ss, height * ss
