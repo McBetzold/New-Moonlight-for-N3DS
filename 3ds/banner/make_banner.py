@@ -141,21 +141,116 @@ def quantize_rgba4(im):
 
 
 
-def make_backdrop():
-    """Night sky: deep navy at the top to dark blue at the bottom, with a
-    faint glow behind the wheel."""
-    w, h = 128, 64  # a smooth gradient: low resolution is enough
-    im = Image.new("RGB", (w, h))
+# The rainbow-road backdrop, drawn in top-screen pixels (at 2x) and then
+# mapped onto the backdrop quad. All its settings are here to tweak.
+SKY_EDGE, SKY_MID = (7, 11, 31), (27, 20, 70)          # #070B1F, #1B1446
+NEBULAE = [  # (centre px, radius px, colour, opacity)
+    ((70, 70), 70, (231, 166, 215), 0.16),     # pink, upper left
+    ((345, 70), 60, (184, 166, 232), 0.14),    # lavender, upper right
+    ((60, 190), 60, (127, 211, 216), 0.13),    # teal, lower left
+    ((340, 195), 70, (231, 166, 215), 0.13),   # pink, lower right
+]
+# the ribbon: a cubic Bezier in screen px, from behind the wheel, sweeping
+# under the title and curving up as it fades into the distance
+RIBBON = [(-10, 150), (140, 214), (300, 214), (382, 168)]
+RIBBON_WIDTH = (13.0, 2.5)        # px at the start and at the end
+RIBBON_OPACITY = 0.75
+RIBBON_COLOURS = [(226, 52, 52), (244, 140, 40), (246, 214, 52), (90, 190, 80),
+                  (60, 182, 196), (60, 120, 220), (140, 80, 200)]
+DIM_STARS = 70
+TEXT_SHADE = ((292, 128), (100, 52), 0.25)   # darker oval behind the title
+BACKDROP_TEX = (256, 128)
+
+
+def _bezier(p, t):
+    u = 1 - t
+    return tuple(u * u * u * p[0][k] + 3 * u * u * t * p[1][k]
+                 + 3 * u * t * t * p[2][k] + t * t * t * p[3][k] for k in range(2))
+
+
+def draw_backdrop_screen(scale=2):
+    """The backdrop as the top screen shows it (400x240 px, drawn at
+    `scale` x for smooth edges)."""
+    W, H = 400 * scale, 240 * scale
+    im = Image.new("RGB", (W, H))
     px = im.load()
-    top, bottom = (5, 8, 22), (22, 36, 72)
-    for y in range(h):
-        t = (y / (h - 1)) ** 1.4
-        for x in range(w):
-            dx, dy = (x - 0.26 * w) / (0.33 * w), (y - 0.48 * h) / (0.46 * h)
-            glow = max(0.0, 1.0 - math.sqrt(dx * dx + dy * dy)) ** 2
-            px[x, y] = tuple(int(min(255, top[i] + (bottom[i] - top[i]) * t
-                                     + glow * (18, 28, 52)[i])) for i in range(3))
-    return quantize_rgba4(im)
+    for y in range(H):
+        t = min(1.0, abs(y / H - 0.55) * 2.2)
+        row = tuple(int(lerp(SKY_MID[i], SKY_EDGE[i], t)) for i in range(3))
+        for x in range(W):
+            px[x, y] = row
+    im = im.convert("RGBA")
+    from PIL import ImageDraw, ImageFilter
+    for (cx, cy), r, col, op in NEBULAE:
+        layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        ImageDraw.Draw(layer).ellipse(
+            [(cx - r) * scale, (cy - r * 0.7) * scale,
+             (cx + r) * scale, (cy + r * 0.7) * scale],
+            fill=col + (int(255 * op),))
+        im = Image.alpha_composite(im, layer.filter(ImageFilter.GaussianBlur(r * scale * 0.45)))
+    # darker oval behind the title
+    (cx, cy), (rx, ry), op = TEXT_SHADE
+    shade = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(shade).ellipse([(cx - rx) * scale, (cy - ry) * scale,
+                                   (cx + rx) * scale, (cy + ry) * scale],
+                                  fill=(0, 0, 8, int(255 * op)))
+    im = Image.alpha_composite(im, shade.filter(ImageFilter.GaussianBlur(30 * scale)))
+    # the rainbow road: stripes side by side along the curve
+    ribbon = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(ribbon)
+    steps = 240
+    n = len(RIBBON_COLOURS)
+    for i in range(steps):
+        t0, t1 = i / steps, (i + 1) / steps
+        (x0, y0), (x1, y1) = _bezier(RIBBON, t0), _bezier(RIBBON, t1)
+        dx, dy = x1 - x0, y1 - y0
+        ln = math.hypot(dx, dy) or 1.0
+        nx, ny = -dy / ln, dx / ln
+        w = lerp(RIBBON_WIDTH[0], RIBBON_WIDTH[1], t0)
+        fade = RIBBON_OPACITY * min(1.0, (1.0 - t0) / 0.45)
+        for k, col in enumerate(RIBBON_COLOURS):
+            off = (k - (n - 1) / 2) * w / n
+            pts = [((x0 + nx * off) * scale, (y0 + ny * off) * scale),
+                   ((x1 + nx * off) * scale, (y1 + ny * off) * scale)]
+            d.line(pts, fill=col + (int(255 * fade),),
+                   width=max(1, int(math.ceil(w / n * scale)) + 1))
+    im = Image.alpha_composite(im, ribbon.filter(ImageFilter.GaussianBlur(0.6 * scale)))
+    # faint far-away stars
+    rnd = random.Random(21)
+    dots = ImageDraw.Draw(im)
+    for _ in range(DIM_STARS):
+        x, y = rnd.uniform(0, 400), rnd.uniform(30, 220)
+        if 204 < x < 372 and 84 < y < 172:
+            continue
+        b = rnd.randint(80, 170)
+        r = rnd.choice((0.5, 0.5, 0.8)) * scale
+        dots.ellipse([x * scale - r, y * scale - r, x * scale + r, y * scale + r],
+                     fill=(b, b, min(255, b + 30), 255))
+    return im
+
+
+def make_backdrop():
+    """draw_backdrop_screen() mapped onto the backdrop quad (56 x 34 units at
+    z = -16, centred on (0, 1)): each texel shows the screen pixel in front
+    of it."""
+    screen = draw_backdrop_screen(2)
+    sp = screen.load()
+    tw, th = BACKDROP_TEX
+    tex = Image.new("RGBA", (tw, th))
+    tp = tex.load()
+    z = -16.0
+    dist = CAM_POS[2] - z
+    tan_y = math.tan(CAM_YFOV / 2)
+    for v in range(th):
+        wy = 1.0 + 17.0 - (v + 0.5) / th * 34.0
+        sy = (1 - (wy - CAM_POS[1]) / (dist * tan_y)) * 120.0
+        for u in range(tw):
+            wx = -28.0 + (u + 0.5) / tw * 56.0
+            sx = (1 + wx / (dist * tan_y * CAM_ASPECT)) * 200.0
+            x = min(screen.width - 1, max(0, int(sx * 2)))
+            y = min(screen.height - 1, max(0, int(sy * 2)))
+            tp[u, v] = sp[x, y]
+    return quantize_rgba4(tex)
 
 
 def make_radial(size, color, max_alpha, power):
@@ -293,19 +388,35 @@ def px_to_world(px, py, z):
 # Where things sit on the top screen (400x240 px) and how close they are.
 # Larger z = closer to the viewer = further out of the screen in 3D. The
 # HOME Menu only draws between its bars, about y 40 to 212: keep inside.
-WHEEL_PX, WHEEL_R_PX, WHEEL_Z = (102, 126), 80, 10.0
+# The HOME Menu shows the banner inside an oval (measured from a photo:
+# centre (200, 128), half-axes about 195 x 102 px) and only between its bars
+# (y 40 to 212). Everything is laid out inside VISIBLE_OVAL with a margin.
+VISIBLE_OVAL = ((200, 128), (189, 96))   # 6 px inside the measured oval
+WHEEL_PX, WHEEL_R_PX, WHEEL_Z = (110, 128), 72, 10.0
 BADGE_Z = 11.0
-TITLE_PX, TITLE_W_PX, TITLE_Z = (300, 126), 190, 9.0
+TITLE_Z = 9.0
+# the two title lines: left edge and the centre heights of the lines; the
+# letter height is set so "Moonlight" is TITLE_WIDTH px wide, and "for N3DS"
+# uses the same height
+TITLE_LEFT, TITLE_WIDTH = 210, 160
+TITLE_ROWS = (104, 148)
 VISIBLE_Y = (44, 208)
 KEEP_CLEAR = [  # star-free areas: the logo and the title
     ("circle", WHEEL_PX, WHEEL_R_PX + 10),
-    ("rect", (202, 74, 398, 178)),
+    ("rect", (204, 80, 372, 176)),
 ]
+
+
+def in_oval(px, py, pad=0.0):
+    (cx, cy), (ax, ay) = VISIBLE_OVAL
+    return ((px - cx) / (ax - pad)) ** 2 + ((py - cy) / (ay - pad)) ** 2 <= 1.0
+
+
 # the HOME Menu's own spin: one turn per this many seconds (= the loop)
 AUTOROTATE_SECONDS = 10.0
 # parts drawn as screen-facing billboards by convert.py (their nodes sit at
 # the origin; the geometry itself is moved into place)
-BILLBOARDS = ("backdrop", "badge", "title")
+BILLBOARDS = ("backdrop", "badge", "title", "title2")
 
 
 def offset_mesh(mesh, offset):
@@ -381,7 +492,7 @@ def build_scene():
             px = rnd.uniform(8, 392)
             py = rnd.uniform(VISIBLE_Y[0] + 6, VISIBLE_Y[1] - 6)
             size_px = rnd.uniform(s0, s1)
-            if not clear(px, py, size_px / 2):
+            if not clear(px, py, size_px / 2) or not in_oval(px, py, size_px):
                 continue
             if any(math.hypot(px - qx, py - qy) < 26 for qx, qy in placed):
                 continue
@@ -403,22 +514,40 @@ def build_scene():
             return (v, v, v)
         tw.anim["scale"] = scale
 
-    # "new" and its dashes, and the title: billboards at the origin
+    # "new" and its dashes, centred on the wheel; billboards at the origin.
+    # Textures: badge 128x32 (about 1 texel per screen pixel), title lines
+    # 256x64 and 128x64 (all sizes different: see check_texture_sizes)
     img_px = WHEEL_R_PX / 0.49
     kb = world_per_pixel(BADGE_Z)
     bw_px = 0.88 * img_px
-    bx, by = px_to_world(WHEEL_PX[0], WHEEL_PX[1] - 0.03 * img_px, BADGE_Z)
-    badge = mat("badge", texture=quantize_rgba4(logo_art.new_badge(256, 64)),
+    bx, by = px_to_world(WHEEL_PX[0], WHEEL_PX[1], BADGE_Z)
+    badge = mat("badge", texture=quantize_rgba4(logo_art.new_badge(128, 32)),
                 blend=True)
     root.add(Node("badge", offset_mesh(quad_mesh(bw_px * kb, bw_px * kb / 4),
                                        (bx, by, BADGE_Z)), badge))
     kt = world_per_pixel(TITLE_Z)
-    tx, ty = px_to_world(TITLE_PX[0], TITLE_PX[1], TITLE_Z)
-    title = mat("title", texture=quantize_rgba4(logo_art.title_block(256, 128)),
-                blend=True)
-    root.add(Node("title", offset_mesh(quad_mesh(TITLE_W_PX * kt,
-                                                 TITLE_W_PX * kt / 2),
-                                       (tx, ty, TITLE_Z)), title))
+    lines = [("title", logo_art.rainbow_text("Moonlight", 96), (256, 64)),
+             ("title2", logo_art.rainbow_text("for N3DS", 96, red_fill=(5,)),
+              (128, 64))]
+    # one scale for both lines (screen px per pixel of the drawn text), so
+    # their letters are the same size whatever their ascenders/descenders
+    k_px = TITLE_WIDTH / lines[0][1].width
+    for (name, img, tex), row in zip(lines, TITLE_ROWS):
+        text_h = img.height * k_px
+        card = logo_art.text_card(img, tex[0], tex[1])
+        # how big one texel is on screen so the letters are text_h px tall
+        fit = min(tex[0] * 0.97 / img.width, tex[1] * 0.92 / img.height)
+        texel = text_h / (img.height * fit)
+        w, h = tex[0] * texel, tex[1] * texel
+        left = TITLE_LEFT - tex[0] * 0.015 * texel
+        cx, cy = left + w / 2, row
+        if not (in_oval(left + img.width * fit * texel, cy - text_h / 2)
+                and in_oval(left + img.width * fit * texel, cy + text_h / 2)):
+            sys.exit("%s does not fit inside the visible oval" % name)
+        m = mat(name, texture=quantize_rgba4(card), blend=True)
+        tx, ty = px_to_world(cx, cy, TITLE_Z)
+        root.add(Node(name, offset_mesh(quad_mesh(w * kt, h * kt),
+                                        (tx, ty, TITLE_Z)), m))
 
     roots = [root]
     if OMIT:
