@@ -726,7 +726,7 @@ void MoonlightUi::settings_draw_top() {
     draw_header("Settings", "", true);
 
     const float cx = 20.0f, cy = 42.0f, cw = TOP_W - 40.0f, ch = 168.0f;
-    rrect(cx, cy, cw, ch, 8, color::surface);
+    panel(cx, cy, cw, ch, 8);
 
     if (rows_.empty() || sel_row_ >= (int)rows_.size()) {
         return;
@@ -744,7 +744,7 @@ void MoonlightUi::settings_draw_top() {
     float ty = cy + 12.0f;
     text(group, cx + 16.0f, ty, 0.38f, color::skyblue);
     ty += line_height(0.38f) + 2.0f;
-    text(row.label, cx + 16.0f, ty, 0.6f, color::text);
+    silver_text(row.label, cx + 16.0f, ty, 0.6f);
     ty += line_height(0.6f) + 2.0f;
     if (row.value) {
         text(row.value(), cx + 16.0f, ty, 0.48f, color::accent_text);
@@ -811,7 +811,8 @@ void MoonlightUi::settings_draw_bottom() {
             } else {
                 rrect(LIST_X, y, LIST_W, h, 5, sel ? color::card_hi : color::card);
                 if (sel) {
-                    rect(LIST_X, y + 4, 3, h - 8, color::accent);
+                    // inside the row: the rows are close together
+                    rainbow_frame(LIST_X, y, LIST_W, h, 5, 2.0f);
                 }
                 float label_y = row.type == SettingRow::Slider
                                     ? y + 4.0f
