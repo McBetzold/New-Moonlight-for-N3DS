@@ -38,7 +38,14 @@ constexpr size_t TILED_BYTES = (size_t)TEX_W * TEX_H * 2; // RGB565
 // launcher replaces with art in its own look. Recognised byte for byte
 // (current and older releases); any other picture is the host's custom art
 // and is shown as it is.
-enum class Default : u32 { None = 0, Desktop, Steam, VirtualDisplay, RemoteInput };
+enum class Default : u32 {
+    None = 0,
+    Desktop,
+    Steam,
+    VirtualDisplay,
+    RemoteInput,
+    Generic, // box.png, for apps without a picture
+};
 
 // Fingerprint of a downloaded picture; the cache keeps it to notice when the
 // host's picture has changed

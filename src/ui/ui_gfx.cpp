@@ -774,23 +774,45 @@ void virtual_display(float cx, float cy, float size) {
     monitor_stand(cx, top, h, size, color::silver);
 }
 
-void steam(float cx, float cy, float size) {
-    float r = size * 0.42f;
-    // the turning rainbow ring of the logo around a silver disc
-    rainbow_ring(cx, cy, r * 1.14f, r * 1.02f,
+void steam(float cx, float cy, float r, u32 cut) {
+    // a thin turning rainbow ring: the launcher's touch
+    rainbow_ring(cx, cy, r * 1.13f, r * 1.04f,
                  2.0f * (float)M_PI * cycle(20000));
-    circle(cx, cy, r, color::silver);
-    // the piston: a large and a small ring joined by a rod, and the rod's
-    // tail out to the disc's left edge, cut out in the sky's colour
-    u32 cut = mix(color::bg, color::sky_mid, 0.5f);
-    float bx = cx + r * 0.30f, by = cy - r * 0.24f;  // large ring
-    float sx = cx - r * 0.22f, sy = cy + r * 0.26f;  // small ring
-    line(cx - r * 0.92f, cy + r * 0.06f, sx, sy, r * 0.20f, cut);
-    line(sx, sy, bx, by, r * 0.24f, cut);
+    // Steam's logo, measured from its default picture: a white disc with
+    // a piston (a large and a small ring joined by a rod, and a tail out
+    // to the disc's left edge) cut out in the background colour
+    circle(cx, cy, r, color::text);
+    float bx = cx + r * 0.385f, by = cy - r * 0.26f; // large ring
+    float sx = cx - r * 0.31f, sy = cy + r * 0.39f;  // small ring
+    // the tail, ending on the disc's edge
+    float ax = cx - r * 0.997f, ay = cy - r * 0.08f;
+    float dx = cx - r * 0.975f, dy = cy + r * 0.22f;
+    triangle(ax, ay, sx, sy - r * 0.25f, sx, sy + r * 0.25f, cut);
+    triangle(ax, ay, sx, sy + r * 0.25f, dx, dy, cut);
+    line(sx, sy, bx, by, r * 0.25f, cut);
     circle(bx, by, r * 0.34f, cut);
-    circle(bx, by, r * 0.20f, color::silver);
-    circle(sx, sy, r * 0.21f, cut);
-    circle(sx, sy, r * 0.11f, color::silver);
+    circle(bx, by, r * 0.20f, color::text);
+    circle(sx, sy, r * 0.25f, cut);
+    circle(sx, sy, r * 0.14f, color::text);
+}
+
+void game(float cx, float cy, float size) {
+    float w = size, h = size * 0.56f;
+    u32 dark = mix(color::bg, color::sky_mid, 0.5f);
+    rrect(cx - w / 2, cy - h / 2, w, h, size * 0.16f, color::silver);
+    circle(cx - w * 0.32f, cy + h * 0.25f, size * 0.14f, color::silver);
+    circle(cx + w * 0.32f, cy + h * 0.25f, size * 0.14f, color::silver);
+    // a metallic shine along the top
+    rrect(cx - w * 0.36f, cy - h * 0.42f, w * 0.72f, h * 0.16f, h * 0.08f,
+          with_alpha(color::white, 0x70));
+    plus(cx - w * 0.26f, cy - h * 0.02f, size * 0.22f, size * 0.07f, dark);
+    // face buttons in the rainbow
+    const float buttons[4][2] = {
+        {0.20f, -0.02f}, {0.32f, -0.22f}, {0.44f, -0.02f}, {0.32f, 0.18f}};
+    for (int i = 0; i < 4; i++) {
+        circle(cx + w * buttons[i][0], cy + h * buttons[i][1], size * 0.055f,
+               rainbow((float)i / 4.0f));
+    }
 }
 
 void mouse(float cx, float cy, float size) {

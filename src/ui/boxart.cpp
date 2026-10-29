@@ -30,9 +30,9 @@ namespace boxart {
 
 static const char *CACHE_ROOT = MOONLIGHT_3DS_PATH "/boxart";
 // Bumped whenever the cache format changes so stale SD caches are redone
-// ("BXA4": the header records the picture's fingerprint and whether it was
-// the host's default).
-static const u32 CACHE_MAGIC = 0x34415842; // "BXA4"
+// ("BXA5": the header records the picture's fingerprint and which of the
+// hosts' default pictures it was, box.png included).
+static const u32 CACHE_MAGIC = 0x35415842; // "BXA5"
 
 struct CacheHeader {
     u32 magic;
@@ -63,6 +63,8 @@ static const KnownDefault KNOWN_DEFAULTS[] = {
     {0xc844c1890e7e1af2ULL, 98678, Default::VirtualDisplay}, // Apollo
     {0x598071ab2d7e2dd9ULL, 101584, Default::RemoteInput},   // Apollo
     {0x30caf0963460f93cULL, 101768, Default::RemoteInput},   // older Apollo
+    {0x2259a68fdd069d29ULL, 680, Default::Generic},          // box.png
+    {0x392cdbc49843f29cULL, 998, Default::Generic},          // older box.png
 };
 
 Source fingerprint(const u8 *data, size_t size) {
@@ -106,7 +108,7 @@ bool load_cached(const std::string &path, std::vector<u8> &tiled,
     bool ok = fread(&header, sizeof(header), 1, f) == 1 &&
               header.magic == CACHE_MAGIC && header.tex_w == TEX_W &&
               header.tex_h == TEX_H &&
-              header.kind <= (u32)Default::RemoteInput;
+              header.kind <= (u32)Default::Generic;
     if (ok) {
         kind = (Default)header.kind;
         source.fnv = ((u64)header.src_fnv_hi << 32) | header.src_fnv_lo;

@@ -46,10 +46,40 @@ static const float ART_SCALE = 64.0f / 96.0f; // 64x85 tiles
 static const float HEADER_H = 30.0f;
 static const float HINTS_Y = 220.0f;
 
+// Steam's default picture in the launcher's look: its slate-blue gradient
+// (darkest at the top right) with stars, the logo and "STEAM" underneath,
+// laid out like the original
+static void steam_art(float x, float y, float w, float h) {
+    u32 tl = mix(rgba(0x37, 0x47, 0x4f), color::sky_mid, 0.2f);
+    u32 tr = mix(rgba(0x22, 0x2b, 0x33), color::sky_mid, 0.2f);
+    u32 bl = mix(rgba(0x56, 0x6c, 0x78), color::sky_mid, 0.2f);
+    u32 br = mix(rgba(0x3c, 0x4c, 0x56), color::sky_mid, 0.2f);
+    C2D_DrawRectangle(x, y, 0.0f, w, h, tl, tr, bl, br);
+    static const float stars[][2] = {{0.12f, 0.08f}, {0.86f, 0.12f},
+                                     {0.1f, 0.62f},  {0.88f, 0.56f},
+                                     {0.22f, 0.86f}, {0.74f, 0.92f}};
+    for (auto &st : stars) {
+        circle(x + w * st[0], y + h * st[1], std::max(0.7f, w * 0.009f),
+               with_alpha(color::silver, 0xa0));
+    }
+    float r = w * 0.2f, cx = x + w / 2.0f, cy = y + h * 0.33f;
+    // the colour behind the logo, for its cut-outs
+    u32 behind = mix(mix(tl, tr, 0.5f), mix(bl, br, 0.5f), 0.33f);
+    icon::steam(cx, cy, r, behind);
+    float scale = w * 0.0058f;
+    silver_text("STEAM", cx, y + h * 0.59f - line_height(scale) / 2.0f, scale,
+                C2D_AlignCenter);
+    rect_outline(x, y, w, h, 1, color::border);
+}
+
 // Replaces the host's default pictures (boxart::identify_default) with art
 // in the launcher's look: a small night sky with the entry's icon
 static void default_art(boxart::Default kind, float x, float y, float w,
                         float h) {
+    if (kind == boxart::Default::Steam) {
+        steam_art(x, y, w, h);
+        return;
+    }
     float mid = h * 0.6f;
     u32 deep = mix(color::sky_mid, color::bg, 0.5f);
     rect_gradient_v(x, y, w, mid, color::sky_mid, deep);
@@ -68,8 +98,10 @@ static void default_art(boxart::Default kind, float x, float y, float w,
     case boxart::Default::Desktop:
         icon::desktop(cx, cy, size, color::silver);
         break;
+    case boxart::Default::Generic:
+        icon::game(cx, cy, size);
+        break;
     case boxart::Default::Steam:
-        icon::steam(cx, cy, size * 0.9f);
         break;
     case boxart::Default::VirtualDisplay:
         icon::virtual_display(cx, cy, size);
