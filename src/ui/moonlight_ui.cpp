@@ -46,30 +46,9 @@ static const float ART_SCALE = 64.0f / 96.0f; // 64x85 tiles
 static const float HEADER_H = 30.0f;
 static const float HINTS_Y = 220.0f;
 
-// Apollo's virtual display entry and Sunshine's fallback desktop (fixed IDs)
-static const char *const APOLLO_VIRTUAL_DISPLAY_UUID =
-    "8902CB19-674A-403D-A587-41B092E900BA";
-static const char *const FALLBACK_DESKTOP_UUID =
-    "EAAC6159-089A-46A9-9E24-6436885F6610";
-
-static AppEntry::Builtin builtin_kind(const std::string &name,
-                                      const std::string &uuid) {
-    if (strcasecmp(uuid.c_str(), APOLLO_REMOTE_INPUT_UUID) == 0) {
-        return AppEntry::Builtin::RemoteInput;
-    }
-    if (strcasecmp(uuid.c_str(), APOLLO_VIRTUAL_DISPLAY_UUID) == 0) {
-        return AppEntry::Builtin::VirtualDisplay;
-    }
-    if (strcasecmp(uuid.c_str(), FALLBACK_DESKTOP_UUID) == 0 ||
-        strcasecmp(name.c_str(), "Desktop") == 0) {
-        return AppEntry::Builtin::Desktop;
-    }
-    return AppEntry::Builtin::None;
-}
-
-// Box art for the built-in entries in the launcher's look: a small night
-// sky with the entry's icon
-static void builtin_art(AppEntry::Builtin kind, float x, float y, float w,
+// Replaces the host's default pictures (boxart::identify_default) with art
+// in the launcher's look: a small night sky with the entry's icon
+static void default_art(boxart::Default kind, float x, float y, float w,
                         float h) {
     float mid = h * 0.6f;
     u32 deep = mix(color::sky_mid, color::bg, 0.5f);
@@ -86,16 +65,19 @@ static void builtin_art(AppEntry::Builtin kind, float x, float y, float w,
     rect_outline(x, y, w, h, 1, color::border);
     float cx = x + w / 2.0f, cy = y + h * 0.5f, size = w * 0.62f;
     switch (kind) {
-    case AppEntry::Builtin::Desktop:
+    case boxart::Default::Desktop:
         icon::desktop(cx, cy, size, color::silver);
         break;
-    case AppEntry::Builtin::VirtualDisplay:
+    case boxart::Default::Steam:
+        icon::steam(cx, cy, size * 0.9f);
+        break;
+    case boxart::Default::VirtualDisplay:
         icon::virtual_display(cx, cy, size);
         break;
-    case AppEntry::Builtin::RemoteInput:
+    case boxart::Default::RemoteInput:
         icon::mouse(cx, cy, size * 0.9f);
         break;
-    case AppEntry::Builtin::None:
+    case boxart::Default::None:
         break;
     }
 }
@@ -272,13 +254,45 @@ void MoonlightUi::pump() {
             if (app.art_state == AppEntry::ArtState::Loading && app.job &&
                 app.job->is_done()) {
                 if (app.art_result && app.art_result->ok &&
-                    boxart::texture_upload(app.art, app.art_result->tiled)) {
+                    app.art_result->kind != boxart::Default::None) {
+                    // the host's default picture: draw the themed art
+                    app.default_art = app.art_result->kind;
+                    app.art_state = AppEntry::ArtState::Ready;
+                } else if (app.art_result && app.art_result->ok &&
+                           boxart::texture_upload(app.art,
+                                                  app.art_result->tiled)) {
+                    app.default_art = boxart::Default::None;
                     app.art_state = AppEntry::ArtState::Ready;
                 } else {
                     app.art_state = AppEntry::ArtState::Missing;
                 }
+                bool recheck = app.art_result && app.art_result->from_cache &&
+                               !app.revalidated;
+                boxart::Source cached =
+                    app.art_result ? app.art_result->source : boxart::Source();
                 app.job = nullptr;
                 app.art_result = nullptr;
+                if (recheck) {
+                    app.revalidated = true;
+                    recheck_boxart(app, cached);
+                }
+            }
+            // the host's picture changed since it was cached
+            if (app.recheck_job && app.recheck_job->is_done()) {
+                auto changed = app.recheck_result;
+                app.recheck_job = nullptr;
+                app.recheck_result = nullptr;
+                if (changed && changed->ok) {
+                    if (changed->kind != boxart::Default::None) {
+                        boxart::texture_free(app.art);
+                        app.default_art = changed->kind;
+                        app.art_state = AppEntry::ArtState::Ready;
+                    } else if (boxart::texture_upload(app.art,
+                                                      changed->tiled)) {
+                        app.default_art = boxart::Default::None;
+                        app.art_state = AppEntry::ArtState::Ready;
+                    }
+                }
             }
         }
     }
@@ -344,9 +358,13 @@ void MoonlightUi::draw_header(const std::string &title,
     if (logo) {
         logo_wheel(x + 10, HEADER_H / 2, 11);
         x += 28.0f;
-        logo_text(title, x - 2.0f, 3.0f, 0.6f);
+    }
+    // centred between the top of the screen and the rainbow underneath
+    float ty = (HEADER_H - line_height(0.6f)) / 2.0f;
+    if (logo) {
+        logo_text(title, x - 2.0f, ty, 0.6f);
     } else {
-        silver_text(title, x, 5.0f, 0.6f);
+        silver_text(title, x, ty, 0.6f);
     }
     if (!subtitle.empty()) {
         text(subtitle, TOP_W - 12.0f, 9.0f, 0.42f, color::text_dim,
@@ -1942,8 +1960,8 @@ void MoonlightUi::apps_draw_top() {
     float ax = cx + 18.0f, ay = cy + 20.0f;
     rrect(ax - 3, ay - 3, boxart::IMG_W + 6, boxart::IMG_H + 6, 5,
           running ? color::ok : color::card_hi);
-    if (app.builtin != AppEntry::Builtin::None) {
-        builtin_art(app.builtin, ax, ay, boxart::IMG_W, boxart::IMG_H);
+    if (app.default_art != boxart::Default::None) {
+        default_art(app.default_art, ax, ay, boxart::IMG_W, boxart::IMG_H);
     } else if (app.art_state == AppEntry::ArtState::Ready) {
         boxart::draw(app.art, ax, ay, 1.0f);
     } else {
@@ -2028,8 +2046,8 @@ void MoonlightUi::apps_draw_bottom() {
         if (running && !sel) {
             rrect(ax - 2, ay - 2, art_w + 4, art_h + 4, 4, color::ok);
         }
-        if (app.builtin != AppEntry::Builtin::None) {
-            builtin_art(app.builtin, ax, ay, art_w, art_h);
+        if (app.default_art != boxart::Default::None) {
+            default_art(app.default_art, ax, ay, art_w, art_h);
         } else if (app.art_state == AppEntry::ArtState::Ready) {
             boxart::draw(app.art, ax, ay, ART_SCALE);
         } else {
@@ -2155,13 +2173,14 @@ void MoonlightUi::apply_apps(const std::shared_ptr<HostEntry> &host,
         app.uuid = entry.uuid;
         app.input_only = strcasecmp(entry.uuid.c_str(),
                                     APOLLO_REMOTE_INPUT_UUID) == 0;
-        app.builtin = builtin_kind(entry.name, entry.uuid);
         app.tile_name = ellipsize(app.name, 0.36f, APP_W - 4.0f);
         // Keep already-loaded art for apps that are still present
         for (auto &old : apps_) {
             if (old.id == app.id &&
                 old.art_state == AppEntry::ArtState::Ready) {
                 app.art = old.art;
+                app.default_art = old.default_art;
+                app.revalidated = old.revalidated;
                 app.art_state = AppEntry::ArtState::Ready;
                 old.art.valid = false; // ownership moved
                 break;
@@ -2183,7 +2202,7 @@ void MoonlightUi::apply_apps(const std::shared_ptr<HostEntry> &host,
 }
 
 void MoonlightUi::queue_boxart(AppEntry &app) {
-    if (!cur_host_ || app.builtin != AppEntry::Builtin::None) {
+    if (!cur_host_) {
         return;
     }
     auto host = cur_host_;
@@ -2195,8 +2214,10 @@ void MoonlightUi::queue_boxart(AppEntry &app) {
     app.job = Worker::instance().post(
         [host, result, key, id] {
             std::string path = boxart::cache_path(key, id);
-            if (boxart::load_cached(path, result->tiled)) {
+            if (boxart::load_cached(path, result->tiled, result->kind,
+                                    result->source)) {
                 result->ok = true;
+                result->from_cache = true;
                 return;
             }
             char *data = nullptr;
@@ -2205,11 +2226,51 @@ void MoonlightUi::queue_boxart(AppEntry &app) {
             int status = gs_download_boxart(&host->server, id, &data, &size);
             http_set_timeout_s(60);
             if (status == GS_OK && data != nullptr) {
+                result->source = boxart::fingerprint((const u8 *)data, size);
+                result->kind = boxart::identify_default(result->source);
                 if (boxart::decode_png((const u8 *)data, size,
                                        result->tiled)) {
                     result->ok = true;
                     boxart::ensure_cache_dir(key);
-                    boxart::save_cache(path, result->tiled);
+                    boxart::save_cache(path, result->tiled, result->kind,
+                                       result->source);
+                }
+            }
+            free(data);
+        },
+        true, true); // background, droppable
+}
+
+// Downloads the picture again and delivers it only if it differs from the
+// cached one (result->ok), updating the cache
+void MoonlightUi::recheck_boxart(AppEntry &app, const boxart::Source &cached) {
+    if (!cur_host_) {
+        return;
+    }
+    auto host = cur_host_;
+    auto result = std::make_shared<ArtResult>();
+    std::string key = host->cache_key();
+    int id = app.id;
+    app.recheck_result = result;
+    app.recheck_job = Worker::instance().post(
+        [host, result, key, id, cached] {
+            char *data = nullptr;
+            size_t size = 0;
+            http_set_timeout_s(20);
+            int status = gs_download_boxart(&host->server, id, &data, &size);
+            http_set_timeout_s(60);
+            if (status == GS_OK && data != nullptr) {
+                result->source = boxart::fingerprint((const u8 *)data, size);
+                if (!(result->source == cached)) {
+                    result->kind = boxart::identify_default(result->source);
+                    if (boxart::decode_png((const u8 *)data, size,
+                                           result->tiled)) {
+                        result->ok = true;
+                        boxart::ensure_cache_dir(key);
+                        boxart::save_cache(boxart::cache_path(key, id),
+                                           result->tiled, result->kind,
+                                           result->source);
+                    }
                 }
             }
             free(data);
