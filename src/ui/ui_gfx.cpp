@@ -628,15 +628,16 @@ void rainbow_frame(float x, float y, float w, float h, float radius,
 }
 
 // A ring between radii inner and outer in the rainbow, turned by angle (the
-// colours stay fixed to the ring as it turns)
+// colours stay fixed to the ring as it turns); colour_shift moves the
+// colours around a ring that stays still instead
 static void rainbow_ring(float cx, float cy, float outer, float inner,
-                         float angle) {
+                         float angle, float colour_shift = 0.0f) {
     const float two_pi = 2.0f * (float)M_PI;
     const int segments = outer >= 20.0f ? 48 : 24;
     for (int i = 0; i < segments; i++) {
         float t0 = (float)i / segments, t1 = (float)(i + 1) / segments;
         float a0 = angle + two_pi * t0, a1 = angle + two_pi * t1;
-        u32 c0 = rainbow(t0), c1 = rainbow(t1);
+        u32 c0 = rainbow(t0 - colour_shift), c1 = rainbow(t1 - colour_shift);
         float ox0 = cx + outer * std::cos(a0), oy0 = cy + outer * std::sin(a0);
         float ox1 = cx + outer * std::cos(a1), oy1 = cy + outer * std::sin(a1);
         float ix0 = cx + inner * std::cos(a0), iy0 = cy + inner * std::sin(a0);
@@ -775,9 +776,9 @@ void virtual_display(float cx, float cy, float size) {
 }
 
 void steam(float cx, float cy, float r, u32 cut) {
-    // a thin turning rainbow ring: the launcher's touch
-    rainbow_ring(cx, cy, r * 1.13f, r * 1.04f,
-                 2.0f * (float)M_PI * cycle(20000));
+    // a thin rainbow ring, the launcher's touch: it stays still while its
+    // colours flow around it
+    rainbow_ring(cx, cy, r * 1.13f, r * 1.04f, 0.0f, cycle(20000));
     // Steam's logo, measured from its default picture: a white disc with
     // a piston (a large and a small ring joined by a rod, and a tail out
     // to the disc's left edge) cut out in the background colour
