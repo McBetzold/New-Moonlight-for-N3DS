@@ -14,8 +14,8 @@ so nothing may come closer than z = 18):
   * 23 stars that twinkle, from deep behind the screen (z = -12) to well in
     front of it (z = 15), kept out of the logo and title areas
   * the wheel (Isaac's artwork, wheel_art.jpg, with the gaps between the
-    spokes see-through) spinning in place out of the screen (z = 10), with
-    a soft glow behind it
+    spokes cut out) spinning in place out of the screen (z = 10), with a
+    soft glow behind it
   * the silver "new" and its dashes, fixed, just in front of it (z = 11)
   * "Moonlight / for N3DS", fixed, popping out at z = 9
   Things are placed by their top-screen pixel position and scaled with
@@ -28,9 +28,14 @@ Animation notes (pycgfx limitations):
   * an angle must not wrap past +-180 degrees between keys, so the wheel's
     full turn per loop is split over two nested nodes of just under 180
     degrees each
-  * an animated node carries no position of its own: the wheel's position
-    is on an unanimated parent, so it cannot drift whatever the HOME Menu
-    does with the channels an animation leaves out
+  * a turning node carries no position of its own: the wheel's position is
+    on a parent whose position animation just holds still, so it cannot
+    drift whatever the HOME Menu does with channels an animation leaves out
+  * pycgfx moves every part without a BLEND mesh ahead of the BLEND ones.
+    A banner that needed that reordering (an unanimated empty node among
+    the BLEND meshes) crashed the HOME Menu with a data abort, so the
+    script keeps the nodes in that order itself (check_node_order). The
+    wheel's see-through gaps use an alpha test (MASK), not BLEND, for this
   * all animations share one loop, so every periodic motion completes a
     whole number of cycles in LOOP_SECONDS
   * translucent meshes are drawn in node order, so they are sorted back to
@@ -272,9 +277,10 @@ class Node:
 
 class Material:
     def __init__(self, name, color=(1, 1, 1, 1), texture=None, roughness=1.0,
-                 blend=False, color_anim=None):
+                 blend=False, color_anim=None, mask=False):
         self.name, self.color, self.texture = name, color, texture
         self.roughness, self.blend, self.color_anim = roughness, blend, color_anim
+        self.mask = mask  # alpha test cut-out: drawn with the opaque meshes
 
     def color_at(self, time):
         return self.color_anim(time) if self.color_anim else self.color
@@ -329,25 +335,27 @@ def build_scene():
     # translucent pieces, all sorted back to front below
     blended = []
 
-    # the wheel: Isaac's artwork with the gaps between the spokes see-through.
-    # Its position is on a node that is never animated, and the two spinning
-    # nodes inside it sit at zero, so the wheel turns about its own centre
-    # however the HOME Menu treats the channels an animation leaves out. One
-    # full turn per loop is split over the two nodes so no angle passes 180.
+    # the wheel: Isaac's artwork with the gaps between the spokes cut out
+    # (alpha test, so it is drawn with the opaque meshes). Laid out like the
+    # first banner, which worked on the 3DS: a parent node whose position
+    # is animated (here it just holds still), with the turning nodes inside
+    # it at zero, so the wheel can only turn about its own centre. One full
+    # turn per loop is split over the two nodes so no angle passes 180.
     k = world_per_pixel(WHEEL_Z)
     wx, wy = px_to_world(WHEEL_PX[0], WHEEL_PX[1], WHEEL_Z)
     wheel_tex = logo_art.wheel_art(128)  # small textures: see BANNER BUDGET
-    wheel_mat = mat("Wheel", texture=quantize_rgba4(wheel_tex), blend=True)
+    wheel_mat = mat("Wheel", texture=quantize_rgba4(wheel_tex), mask=True)
     disc = disc_mesh(WHEEL_R_PX * k)
     # logo_art frames the ring edge at 0.49 of the image: map the disc rim there
     disc.uv = [(0.5 + (u - 0.5) * 0.98, 0.5 + (v - 0.5) * 0.98) for u, v in disc.uv]
     wheel_pos = Node("WheelPosition", t=(wx, wy, WHEEL_Z))
+    wheel_pos.anim["translation"] = lambda tm: (wx, wy, WHEEL_Z)
     spin_a = wheel_pos.add(Node("WheelSpinA"))
     spin_a.anim["rotation"] = lambda tm: quat_axis(
         (0, 0, 1), -math.radians(179.9) * tm / LOOP_SECONDS)
     spin_b = spin_a.add(Node("WheelSpinB", disc, wheel_mat))
     spin_b.anim["rotation"] = spin_a.anim["rotation"]
-    blended.append((WHEEL_Z, wheel_pos))
+    roots.append(wheel_pos)
 
     # a soft glow just behind the wheel, so it stands out from the sky
     halo = mat("Halo", texture=quantize_rgba4(
@@ -365,12 +373,15 @@ def build_scene():
         phase = i / float(len(SPARKLE_COLORS))
         cycles = 2 + (i % 3)
 
-        def anim(tm, phase=phase, cycles=cycles, color=color):
+        # brightness and opacity together, (b, b, b, b), as in the banners
+        # that worked on the 3DS
+        def anim(tm, phase=phase, cycles=cycles):
             s = 0.5 + 0.5 * math.sin(
                 2 * math.pi * (cycles * tm / LOOP_SECONDS + phase))
-            return color + (0.08 + 0.92 * s * s,)
-        twinklers.append(mat("Sparkle%d" % i, color=color + (1.0,),
-                             texture=sparkle, blend=True, color_anim=anim))
+            b = 0.08 + 0.92 * s * s
+            return (b, b, b, b)
+        twinklers.append(mat("Star%d" % i, texture=sparkle, blend=True,
+                             color_anim=anim))
 
     def clear(px, py, pad):
         for kind, a, *rest in KEEP_CLEAR:
@@ -427,7 +438,23 @@ def build_scene():
     # pycgfx draws translucent meshes in node order: back to front
     blended.sort(key=lambda b: b[0])
     roots += [n for _, n in blended]
+    check_node_order(roots)
     return roots, mats
+
+
+def check_node_order(roots):
+    """pycgfx moves every part without a BLEND mesh ahead of the BLEND ones.
+    The banner that did need reordering crashed the HOME Menu, so the scene
+    must already be in that order."""
+    seen_blend = False
+    stack = list(reversed(roots))
+    while stack:
+        n = stack.pop()
+        blend = n.mesh is not None and n.material.blend
+        if seen_blend and not blend:
+            sys.exit("node order: %s (not BLEND) comes after a BLEND mesh" % n.name)
+        seen_blend = seen_blend or blend
+        stack.extend(reversed(n.children))
 
 
 # ---------------------------------------------------------------------------
@@ -480,6 +507,9 @@ def write_glb(roots, mats, path):
                 "index": tex_index[key]}
         if m.blend:
             entry["alphaMode"] = "BLEND"
+        elif m.mask:
+            entry["alphaMode"] = "MASK"
+            entry["alphaCutoff"] = 0.5
         materials.append(entry)
         mat_index[name] = len(materials) - 1
 
@@ -639,6 +669,8 @@ def render(roots, time, w=400, h=240):
                     rgb = tuple(min(1.0, texel[k] * base[k] * diff + spec)
                                 for k in range(3))
                     a = texel[3] * base[3] if mat.blend else 1.0
+                    if mat.mask and texel[3] * base[3] < 0.5:
+                        continue
                     if mat.blend:
                         old = color[py][px]
                         color[py][px] = tuple(old[k] * (1 - a) + rgb[k] * a
