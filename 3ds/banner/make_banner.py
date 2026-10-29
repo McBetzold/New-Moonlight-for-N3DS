@@ -399,10 +399,26 @@ BADGE_Z = 11.0
 TITLE_Z = 9.0
 # the title card: left edge, centre height and how wide "Moonlight" is
 TITLE_LEFT, TITLE_CY, TITLE_WIDTH = 210, 128, 160
-VISIBLE_Y = (44, 208)
-KEEP_CLEAR = [  # star-free areas: the logo and the title
-    ("circle", WHEEL_PX, WHEEL_R_PX + 10),
-    ("rect", (204, 80, 372, 176)),
+# the stars of test 7 (8e2e0b6), the last banner that worked on the 3DS:
+# (z, x, y, size) in world units, back to front. Tests 8 and 9 placed 13
+# new stars inside the oval and both froze the HOME Menu, though nothing
+# else in their scenes differed from test 7's but positions and pictures.
+# These keep clear of the wheel and the title.
+STARS = [
+    (-10.7071, -23.7065, -6.7387, 1.0692),
+    (-9.1856, 6.8941, -7.0668, 1.005),
+    (-6.5019, -21.4114, 5.2438, 1.0122),
+    (-6.2311, 21.103, -6.1319, 1.0102),
+    (-6.1494, -0.8203, -3.2206, 0.9293),
+    (-3.3617, 14.8495, 7.9271, 1.4818),
+    (-2.7336, 3.1993, 8.2811, 1.0809),
+    (-1.0663, 3.1805, -6.7466, 1.3591),
+    (0.84, 12.6842, -6.1125, 1.1686),
+    (6.5904, -1.1275, 5.677, 1.1879),
+    (7.8602, 6.3514, 6.1697, 1.1707),
+    (7.9059, 7.5045, -4.7312, 1.2593),
+    (9.2864, -0.9075, -4.1719, 1.3251),
+    (12.7926, 13.0422, 5.9326, 0.9548),
 ]
 
 
@@ -469,39 +485,7 @@ def build_scene():
 
     # stars: twinkle by pulsing in size
     star_mat = mat("star", texture=make_sparkle(), blend=True)
-
-    def clear(px, py, pad):
-        for kind, a, *rest in KEEP_CLEAR:
-            if kind == "circle":
-                if math.hypot(px - a[0], py - a[1]) < rest[0] + pad:
-                    return False
-            elif a[0] - pad < px < a[2] + pad and a[1] - pad < py < a[3] + pad:
-                return False
-        return True
-
-    rnd = random.Random(5)
-    placed = []
-    stars = []
-    for count, (z0, z1), (s0, s1) in [(5, (-12, -6), (8, 11)),
-                                      (4, (-4, 3), (10, 14)),
-                                      (5, (5, 15), (13, 19))]:
-        n = tries = 0
-        while n < count and tries < 3000:
-            tries += 1
-            px = rnd.uniform(8, 392)
-            py = rnd.uniform(VISIBLE_Y[0] + 6, VISIBLE_Y[1] - 6)
-            size_px = rnd.uniform(s0, s1)
-            if not clear(px, py, size_px / 2) or not in_oval(px, py, size_px):
-                continue
-            if any(math.hypot(px - qx, py - qy) < 26 for qx, qy in placed):
-                continue
-            z = rnd.uniform(z0, z1)
-            x, y = px_to_world(px, py, z)
-            stars.append((z, x, y, size_px * world_per_pixel(z)))
-            placed.append((px, py))
-            n += 1
-    stars.sort()  # back to front: translucent meshes draw in node order
-    for i, (z, x, y, size) in enumerate(stars):
+    for i, (z, x, y, size) in enumerate(STARS):
         pos = autorotate.add(Node("Star%02d" % i, t=(x, y, z)))
         tw = pos.add(Node("Twinkle%02d" % i, quad_mesh(size, size), star_mat))
         phase, cycles = (i * 0.37) % 1.0, 2 + (i % 3)
