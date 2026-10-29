@@ -721,15 +721,66 @@ void moon(float cx, float cy, float r, u32 color, u32 bg) {
     circle(cx + r * 0.55f, cy + r * 0.45f, r * 0.10f, color);
 }
 
-void desktop(float cx, float cy, float size, u32 color) {
-    float w = size;
-    float h = size * 0.62f;
-    float top = cy - size * 0.46f;
-    rrect(cx - w / 2, top, w, h, size * 0.06f, color);
-    // neck and base
+// The monitor's stand, under a screen of height h starting at top
+static void monitor_stand(float cx, float top, float h, float size,
+                          u32 color) {
     rect(cx - size * 0.07f, top + h, size * 0.14f, size * 0.14f, color);
     rrect(cx - size * 0.28f, top + h + size * 0.14f, size * 0.56f,
           size * 0.07f, size * 0.03f, color);
+}
+
+void desktop(float cx, float cy, float size, u32 color, bool lit) {
+    float w = size;
+    float h = size * 0.62f;
+    float top = cy - size * 0.46f;
+    float b = std::max(2.0f, size * 0.07f); // the frame
+    rrect(cx - w / 2, top, w, h, size * 0.06f, color);
+    // the screen: a night sky, with a rainbow taskbar and stars when lit
+    float sx = cx - w / 2 + b, sy = top + b, sw = w - 2 * b, sh = h - 2 * b;
+    if (lit) {
+        rect_gradient_v(sx, sy, sw, sh, color::sky_mid, color::bg);
+        float bar = std::max(1.5f, size * 0.05f);
+        rainbow_bar(sx, sy + sh - bar, sw, bar);
+        if (size >= 50.0f) {
+            const float stars[3][2] = {{0.2f, 0.25f}, {0.72f, 0.2f},
+                                       {0.48f, 0.55f}};
+            for (auto &s : stars) {
+                circle(sx + sw * s[0], sy + sh * s[1], 1.0f,
+                       with_alpha(color::silver, 0xb0));
+            }
+        }
+    } else {
+        rect(sx, sy, sw, sh, color::bg);
+    }
+    monitor_stand(cx, top, h, size, color);
+}
+
+void virtual_display(float cx, float cy, float size) {
+    float w = size;
+    float h = size * 0.62f;
+    float top = cy - size * 0.46f;
+    float b = std::max(2.0f, size * 0.07f);
+    rect_gradient_v(cx - w / 2 + b, top + b, w - 2 * b, h - 2 * b,
+                    color::sky_mid, color::bg);
+    rainbow_frame(cx - w / 2, top, w, h, size * 0.08f, b);
+    plus(cx, top + h / 2, h * 0.45f, b, color::silver);
+    monitor_stand(cx, top, h, size, color::silver);
+}
+
+void mouse(float cx, float cy, float size) {
+    float w = size * 0.5f, h = size * 0.78f;
+    float x = cx - w / 2, y = cy - h / 2;
+    rrect(x, y, w, h, w / 2, color::silver);
+    // a metallic shine down the left side
+    rrect(x + w * 0.14f, y + h * 0.14f, w * 0.16f, h * 0.48f, w * 0.08f,
+          with_alpha(color::white, 0x70));
+    // the split between the buttons, and the scroll wheel in the rainbow
+    float t = std::max(1.0f, size * 0.03f);
+    rect(cx - t / 2, y, t, h * 0.36f, color::bg);
+    rect(x, y + h * 0.36f, w, t, color::bg);
+    float ww = w * 0.2f, wh = h * 0.2f;
+    rrect(cx - ww / 2, y + h * 0.1f, ww, wh, ww / 2,
+          rainbow((float)(frame_time() % 3000) / 3000.0f));
 }
 
 void gear(float cx, float cy, float r, u32 color, u32 bg) {

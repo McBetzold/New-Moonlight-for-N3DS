@@ -119,6 +119,10 @@ struct AppEntry {
     std::string name;
     std::string uuid;        // Apollo only, "" otherwise
     bool input_only = false; // Apollo's "Remote Input" pseudo-app (no video)
+    // Entries whose host box art is a plain grey picture; the launcher draws
+    // its own themed art for them instead
+    enum class Builtin { None, Desktop, VirtualDisplay, RemoteInput };
+    Builtin builtin = Builtin::None;
     std::string tile_name;   // ellipsized for the grid tile
     enum class ArtState { Pending, Loading, Ready, Missing };
     ArtState art_state = ArtState::Pending;
