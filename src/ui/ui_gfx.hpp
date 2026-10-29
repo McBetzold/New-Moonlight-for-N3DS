@@ -147,7 +147,17 @@ float logo_text_width(const std::string &str, float scale);
 // ---- Icons (procedural, no assets required) --------------------------------
 namespace icon {
 void moon(float cx, float cy, float r, u32 color, u32 bg);
-void desktop(float cx, float cy, float size, u32 color);
+// A monitor: a `color` frame around a night-sky screen, with a rainbow
+// taskbar and stars when lit
+void desktop(float cx, float cy, float size, u32 color, bool lit = true);
+// The middle of desktop()'s screen, for drawing on it
+inline float desktop_screen_y(float cy, float size) {
+    return cy - size * 0.15f;
+}
+// Apollo's virtual display: a monitor in a rainbow frame with a plus
+void virtual_display(float cx, float cy, float size);
+// Apollo's Remote Input: a silver mouse with a rainbow scroll wheel
+void mouse(float cx, float cy, float size);
 void gear(float cx, float cy, float r, u32 color, u32 bg);
 void plus(float cx, float cy, float size, float thickness, u32 color);
 void lock(float cx, float cy, float size, u32 color, u32 bg);
