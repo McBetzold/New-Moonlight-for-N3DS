@@ -759,15 +759,16 @@ void MoonlightUi::pcs_update(const Input &in) {
     }
 
     if (in.pressed(KEY_B)) {
-        if (confirm("Exit Moonlight?",
-                    "Close Moonlight and return to the HOME Menu?", "Exit")) {
+        if (confirm("Exit New Moonlight?",
+                    "Close New Moonlight and return to the HOME Menu?",
+                    "Exit")) {
             quit_ = true;
         }
     }
 }
 
 void MoonlightUi::pcs_draw_top() {
-    draw_header("Moonlight", "Computers", true);
+    draw_header("New Moonlight", "Computers", true);
 
     if (hosts_.empty()) {
         text("No PCs added yet", TOP_W / 2.0f, 76.0f, 0.6f, color::text,

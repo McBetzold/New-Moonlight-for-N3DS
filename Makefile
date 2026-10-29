@@ -63,9 +63,9 @@ GFXBUILD	:=	$(BUILD)
 
 
 # 3dsx
-APP_TITLE	:=	Moonlight
-APP_DESCRIPTION	:=	Moonlight Streaming Client
-APP_AUTHOR	:=	zoeyjodon
+APP_TITLE	:=	New Moonlight for N3DS
+APP_DESCRIPTION	:=	Game streaming from your PC to the New Nintendo 3DS
+APP_AUTHOR	:=	McBetzold (from zoeyjodon's Moonlight)
 ICON		:=	3ds/res/ic_moonlight.png
 
 # CIA
