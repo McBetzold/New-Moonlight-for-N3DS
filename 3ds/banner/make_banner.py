@@ -14,8 +14,7 @@ so nothing may come closer than z = 18):
   * 23 stars that twinkle, from deep behind the screen (z = -12) to well in
     front of it (z = 15), kept out of the logo and title areas
   * the wheel (Isaac's artwork, wheel_art.jpg, with the gaps between the
-    spokes cut out) spinning in place out of the screen (z = 10), with a
-    soft glow behind it
+    spokes cut out) spinning in place out of the screen (z = 10)
   * the silver "new" and its dashes, fixed, just in front of it (z = 11)
   * "Moonlight / for N3DS", fixed, popping out at z = 9
   Things are placed by their top-screen pixel position and scaled with
@@ -42,6 +41,10 @@ Animation notes (pycgfx limitations):
     front by depth
   * the HOME Menu light shines straight into the screen and there is no
     ambient light: faces turned away from the viewer go dark
+
+TEXTURE SIZES: no two textures may have the same pixel size
+(check_texture_sizes). Every banner that froze or crashed the HOME Menu had
+a pair of equal-sized textures; every one that worked did not.
 
 BANNER BUDGET: keep banner.cgfx near 250 KB or less. A 458 KB banner (big
 textures: a 256x256 wheel plus two 256x128 images) froze the whole 3DS when
@@ -361,13 +364,8 @@ def build_scene():
     spin_b.anim["rotation"] = spin_a.anim["rotation"]
     roots.append(wheel_pos)
 
-    # a soft glow just behind the wheel, so it stands out from the sky
-    halo = mat("Halo", texture=quantize_rgba4(
-        make_radial(32, (150, 185, 255), 0.5, 1.6)), blend=True)
-    hx, hy = px_to_world(WHEEL_PX[0], WHEEL_PX[1], WHEEL_Z - 0.8)
-    hs = WHEEL_R_PX * 2.7 * world_per_pixel(WHEEL_Z - 0.8)
-    blended.append((WHEEL_Z - 0.8, Node("Halo", quad_mesh(hs, hs), halo,
-                                        t=(hx, hy, WHEEL_Z - 0.8))))
+    # (no glow behind the wheel: its 32x32 texture matched the star's size,
+    # see check_texture_sizes)
 
     # stars, all twinkling, from deep in the sky to out in front of the screen
     sparkle = make_sparkle()
@@ -456,7 +454,23 @@ def build_scene():
             stack.extend(n.children)
         mats = {k: v for k, v in mats.items() if k in used}
     check_node_order(roots)
+    check_texture_sizes(mats)
     return roots, mats
+
+
+def check_texture_sizes(mats):
+    """Every banner that froze or crashed the HOME Menu had two different
+    textures of the same pixel size (two 256x128, or two 32x32); every
+    banner that worked had all sizes different. The reason is unknown, so
+    keep them different."""
+    sizes = {}
+    for m in mats.values():
+        if m.texture is None:
+            continue
+        sizes.setdefault(m.texture.size, set()).add(id(m.texture))
+    dup = [size for size, texs in sizes.items() if len(texs) > 1]
+    if dup:
+        sys.exit("textures share a size %s; make them different" % dup)
 
 
 def check_node_order(roots):
