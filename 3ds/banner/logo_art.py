@@ -248,6 +248,24 @@ def text_card(img, width, height, align="left"):
     return card
 
 
+def rainbow_title_block(width, height):
+    """"Moonlight" over "for N3DS" in rainbow-outlined silver, left aligned,
+    both lines at the same scale with "Moonlight" 98% of the width.
+    Returns the image and the fraction of its width "Moonlight" fills."""
+    line1 = rainbow_text("Moonlight", 96)
+    line2 = rainbow_text("for N3DS", 96, red_fill=(5,))
+    gap = 0.12 * line1.height
+    s = min(width * 0.98 / line1.width,
+            height * 0.96 / (line1.height + gap + line2.height))
+    line1 = line1.resize((int(line1.width * s), int(line1.height * s)), Image.LANCZOS)
+    line2 = line2.resize((int(line2.width * s), int(line2.height * s)), Image.LANCZOS)
+    im = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    top = int((height - line1.height - gap * s - line2.height) / 2)
+    im.alpha_composite(line1, (0, top))
+    im.alpha_composite(line2, (0, int(top + line1.height + gap * s)))
+    return im, line1.width / width
+
+
 def title_block(width, height, ss=2):
     """"Moonlight" over "for N3DS", left aligned, on transparent."""
     W, H = width * ss, height * ss
@@ -264,12 +282,12 @@ def title_block(width, height, ss=2):
     return im.resize((width, height), Image.LANCZOS)
 
 
-# Isaac's wheel artwork (1024x1024): eight spokes and a rainbow ring on
-# white. Measured: centre (511.5, 511.5), ring from radius 402 to 444.5
-# (outlines included), spokes 42 px wide, meeting in a light hub.
+# Isaac's wheel artwork (1024x1024): eight spokes and a rainbow ring on a
+# starry background. Measured: centre (512, 512), ring from radius 401 to
+# 443.5 (outlines included), spokes 43 px wide, meeting in a light hub.
 WHEEL_ART = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          "wheel_art.jpg")
-_ART_C, _RING_IN, _RING_OUT, _SPOKE_HALF, _HUB = 511.5, 401.0, 445.5, 21.5, 34.0
+_ART_C, _RING_IN, _RING_OUT, _SPOKE_HALF, _HUB = 512.0, 400.5, 443.5, 21.5, 40.0
 
 
 _wheel_art_cache = {}

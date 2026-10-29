@@ -24,8 +24,9 @@ learnt on hardware by others, and are reimplemented here:
      flat cards are screen-facing billboards whose bones sit at the origin
   6. every curve loops over its own keys inside the animation
   And ours:
-  7. the wheel's full turn is written as one float curve (0 to -2 pi), which
-     glTF -> Euler conversion cannot express without wrapping at 180 degrees
+  7. the wheel's full turn is written as one float curve (0 to -2 pi per
+     loop), which glTF -> Euler conversion cannot express without wrapping
+     at 180 degrees; autorotate turns once per 10 s whatever the loop length
   8. no material animations: pokeplatinum-3ds found them unsafe on the HOME
      Menu, so a scene that has them is refused
 """
@@ -35,9 +36,10 @@ import os
 import sys
 
 CGFX_LIMIT = 0x80000          # the HOME Menu's limit for a banner's CGFX
-BILLBOARDS = ("backdrop", "badge", "title", "title2")
+BILLBOARDS = ("backdrop", "badge", "title")
 SPIN_NODE = "wheelspin"
 AUTOROTATE = "autorotate"
+HOME_SPIN_FRAMES = 600.0   # the HOME Menu: one turn per 10 s at 60 fps
 
 
 def main():
@@ -120,7 +122,9 @@ def main():
                 bone.pos_x = bone.pos_y = bone.pos_z = None
                 bone.rot_x = bone.rot_y = bone.rot_z = None
                 if member == AUTOROTATE:
-                    bone.rot_y = full_turn(frames, 2 * math.pi)
+                    # the HOME Menu turns the banner once per 10 s (600
+                    # frames): match that rate over however long the loop is
+                    bone.rot_y = full_turn(frames, 2 * math.pi * frames / HOME_SPIN_FRAMES)
                 else:
                     bone.rot_z = full_turn(frames, -2 * math.pi)
                 done.add(member)
