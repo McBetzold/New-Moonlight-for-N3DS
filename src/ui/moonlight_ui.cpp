@@ -237,6 +237,7 @@ void MoonlightUi::render(const Modal *modal) {
     frame_begin();
 
     scene(Screen::Top, color::bg);
+    sky(Screen::Top);
     draw_top();
     if (modal) {
         draw_modal_top(*modal);
@@ -244,6 +245,7 @@ void MoonlightUi::render(const Modal *modal) {
     draw_toast();
 
     scene(Screen::Bottom, color::bg);
+    sky(Screen::Bottom);
     draw_bottom();
     if (modal) {
         draw_modal_bottom(*modal);
@@ -283,13 +285,15 @@ void MoonlightUi::draw_bottom() {
 void MoonlightUi::draw_header(const std::string &title,
                               const std::string &subtitle, bool logo) {
     rect(0, 0, TOP_W, HEADER_H, color::header);
-    rect(0, HEADER_H, TOP_W, 1, color::border);
+    rainbow_bar(0, HEADER_H, TOP_W, 2);
     float x = 12.0f;
     if (logo) {
-        icon::moon(x + 9, HEADER_H / 2, 9, color::accent, color::header);
-        x += 26.0f;
+        logo_wheel(x + 10, HEADER_H / 2, 11);
+        x += 28.0f;
+        logo_text(title, x - 2.0f, 3.0f, 0.6f);
+    } else {
+        silver_text(title, x, 5.0f, 0.6f);
     }
-    text(title, x, 5.0f, 0.6f, color::text);
     if (!subtitle.empty()) {
         text(subtitle, TOP_W - 12.0f, 9.0f, 0.42f, color::text_dim,
              C2D_AlignRight);
@@ -308,7 +312,7 @@ void MoonlightUi::draw_hints(
 
 void MoonlightUi::draw_toolbar(const std::vector<ToolButton> &buttons) {
     rect(0, 0, BOT_W, TOOLBAR_H, color::header);
-    rect(0, TOOLBAR_H - 1, BOT_W, 1, color::border);
+    rainbow_bar(0, TOOLBAR_H - 2, BOT_W, 2);
     if (buttons.empty()) {
         return;
     }
@@ -319,7 +323,7 @@ void MoonlightUi::draw_toolbar(const std::vector<ToolButton> &buttons) {
         u32 c = b.enabled ? color::text : color::text_faint;
         bool pressed = b.enabled && in_.touching_in(x, 0, bw, TOOLBAR_H);
         if (pressed) {
-            rect(x, 0, bw, TOOLBAR_H - 1, color::card_hi);
+            rect(x, 0, bw, TOOLBAR_H - 2, color::card_hi);
         }
         if (i > 0) {
             rect(x, 6, 1, TOOLBAR_H - 12, color::border);
@@ -375,7 +379,8 @@ void MoonlightUi::draw_toast() {
     float h = line_height(0.45f) + 10.0f;
     float x = (TOP_W - w) / 2.0f;
     float y = HINTS_Y - h - 10.0f;
-    rrect(x, y, w, h, 6, color::accent_dim);
+    rrect(x, y, w, h, h / 2.0f, color::surface);
+    rainbow_frame(x, y, w, h, h / 2.0f, 2.0f);
     text(toast_text_, TOP_W / 2.0f, y + 5.0f, 0.45f, color::text,
          C2D_AlignCenter);
 }
@@ -410,10 +415,9 @@ void MoonlightUi::draw_modal_top(const Modal &m) {
     const float x = 28.0f, w = TOP_W - 56.0f;
     float y = 30.0f, h = 180.0f;
     rrect(x, y, w, h, 8, color::surface);
-    rect(x + 8, y, w - 16, 3, color::accent);
+    rainbow_bar(x + 8, y, w - 16, 3);
     float cy = y + 12.0f;
-    text(ellipsize(m.title, 0.55f, w - 32.0f), x + 16.0f, cy, 0.55f,
-         color::accent_text);
+    silver_text(ellipsize(m.title, 0.55f, w - 32.0f), x + 16.0f, cy, 0.55f);
     cy += line_height(0.55f) + 6.0f;
     if (!m.message.empty()) {
         auto lines = wrap(m.message, 0.42f, w - 32.0f);
@@ -424,19 +428,19 @@ void MoonlightUi::draw_modal_top(const Modal &m) {
     }
     if (!m.big_text.empty()) {
         float scale = 1.3f;
-        float bw = text_width(m.big_text, scale) + 40.0f;
-        float bh = line_height(scale) + 8.0f;
+        float tw = logo_text_width(m.big_text, scale);
+        float bw = tw + 32.0f;
+        float bh = line_height(scale) + 12.0f;
         float by = std::min(cy, y + h - bh - 12.0f);
         rrect((TOP_W - bw) / 2.0f, by, bw, bh, 8, color::card);
-        text(m.big_text, TOP_W / 2.0f, by + 4.0f, scale, color::text,
-             C2D_AlignCenter);
+        logo_text(m.big_text, (TOP_W - tw) / 2.0f, by + 4.0f, scale);
     }
 }
 
 void MoonlightUi::draw_modal_bottom(const Modal &m) {
     rect(0, 0, BOT_W, BOT_H, color::overlay);
     if (m.busy) {
-        icon::spinner(BOT_W / 2.0f, 84.0f, 18.0f, color::accent, now_);
+        icon::spinner(BOT_W / 2.0f, 84.0f, 18.0f, now_);
         if (!m.busy_text.empty()) {
             auto lines = wrap(m.busy_text, 0.42f, BOT_W - 48.0f);
             if (lines.size() > 2) {
@@ -460,10 +464,10 @@ void MoonlightUi::draw_modal_bottom(const Modal &m) {
         if (pressed) {
             fill = mix(fill, color::white, 0.2f);
         }
-        if (sel) {
-            rrect(x - 2, y - 2, w + 4, h + 4, 8, color::accent_text);
-        }
         rrect(x, y, w, h, 6, fill);
+        if (sel) {
+            rainbow_frame(x - 3, y - 3, w + 6, h + 6, 9, 2.5f);
+        }
 
         std::string subtitle =
             i < m.subtitles.size() ? m.subtitles[i] : std::string();
@@ -771,14 +775,23 @@ void MoonlightUi::pcs_draw_top() {
     draw_header("New Moonlight", "Computers", true);
 
     if (hosts_.empty()) {
-        text("No PCs added yet", TOP_W / 2.0f, 76.0f, 0.6f, color::text,
+        // the logo, as on the HOME Menu banner: "new" on the turning wheel
+        // beside the title with its red 3
+        const float wx = 100.0f, wy = 86.0f;
+        logo_wheel(wx, wy, 44.0f);
+        silver_text("new", wx, wy - line_height(0.62f) / 2.0f, 0.62f,
+                    C2D_AlignCenter);
+        logo_text("Moonlight", 158.0f, 50.0f, 1.05f);
+        logo_text("for N3DS", 158.0f, 50.0f + line_height(1.05f) - 2.0f,
+                  1.05f, 5);
+        text("No PCs added yet", TOP_W / 2.0f, 140.0f, 0.5f, color::text,
              C2D_AlignCenter);
         auto lines =
             wrap("Tap  Add PC  on the bottom screen to search the local "
                  "network for PCs running Apollo, Sunshine or GeForce "
                  "Experience, or to enter a PC's IP address.",
-                 0.42f, TOP_W - 80.0f);
-        text_block(lines, TOP_W / 2.0f, 104.0f, 0.42f, color::text_dim,
+                 0.4f, TOP_W - 80.0f);
+        text_block(lines, TOP_W / 2.0f, 160.0f, 0.4f, color::text_dim,
                    C2D_AlignCenter);
         draw_hints({{"A", "Add PC"}, {"START", "Settings"}, {"B", "Exit"}});
         return;
@@ -786,24 +799,23 @@ void MoonlightUi::pcs_draw_top() {
 
     const HostEntry &h = *hosts_[sel_pc_];
     const float cx = 20.0f, cy = 42.0f, cw = TOP_W - 40.0f, ch = 168.0f;
-    rrect(cx, cy, cw, ch, 8, color::surface);
+    panel(cx, cy, cw, ch, 8);
 
     // Big icon with status badge
     float ix = cx + 58.0f, iy = cy + 66.0f;
     icon::desktop(ix, iy, 72, h.online || !h.status_known ? color::text
                                                            : color::text_faint);
     if (h.probing) {
-        icon::spinner(ix, iy - 6, 14, color::accent, now_);
+        icon::spinner(ix, iy - 6, 14, now_);
     } else if (h.status_known && !h.online) {
         icon::warning(ix + 26, iy + 14, 30, color::warn, color::black);
     } else if (h.status_known && !h.paired) {
-        icon::lock(ix + 26, iy + 14, 30, color::text_dim, color::surface);
+        icon::lock(ix + 26, iy + 14, 30, color::text_dim, color::glass);
     }
 
     float tx = cx + 120.0f;
     float ty = cy + 16.0f;
-    text(ellipsize(h.display_name(), 0.62f, cw - 136.0f), tx, ty, 0.62f,
-         color::text);
+    silver_text(ellipsize(h.display_name(), 0.62f, cw - 136.0f), tx, ty, 0.62f);
     ty += line_height(0.62f) + 2.0f;
     text(h.address_text(), tx, ty, 0.42f, color::text_dim);
     ty += line_height(0.42f) + 8.0f;
@@ -871,18 +883,18 @@ void MoonlightUi::pcs_draw_bottom() {
         }
         const HostEntry &h = *hosts_[i];
         bool sel = (int)i == sel_pc_;
-        if (sel) {
-            rrect(x - 3, y - 3, PC_W + 6, PC_H + 6, 9, color::accent);
-        }
         u32 card = sel ? color::card_hi : color::card;
         rrect(x, y, PC_W, PC_H, 7, card);
+        if (sel) {
+            rainbow_frame(x - 3, y - 3, PC_W + 6, PC_H + 6, 10, 2.5f);
+        }
 
         float icx = x + PC_W / 2.0f, icy = y + 32.0f;
         icon::desktop(icx, icy, 38, h.online || !h.status_known
                                         ? color::text
                                         : color::text_faint);
         if (h.probing) {
-            icon::spinner(icx, icy - 3, 8, color::accent, now_);
+            icon::spinner(icx, icy - 3, 8, now_);
         } else if (h.status_known && !h.online) {
             icon::warning(icx + 15, icy + 8, 17, color::warn, color::black);
         } else if (h.status_known && !h.paired) {
@@ -1869,7 +1881,7 @@ void MoonlightUi::apps_draw_top() {
     bool running = cur_host_ && cur_host_->current_game == app.id;
 
     const float cx = 20.0f, cy = 42.0f, cw = TOP_W - 40.0f, ch = 168.0f;
-    rrect(cx, cy, cw, ch, 8, color::surface);
+    panel(cx, cy, cw, ch, 8);
 
     // Box art at native 96x128
     float ax = cx + 18.0f, ay = cy + 20.0f;
@@ -1881,7 +1893,7 @@ void MoonlightUi::apps_draw_top() {
         rect(ax, ay, boxart::IMG_W, boxart::IMG_H, color::card);
         if (app.art_state == AppEntry::ArtState::Loading) {
             icon::spinner(ax + boxart::IMG_W / 2.0f, ay + boxart::IMG_H / 2.0f,
-                          12, color::accent, now_);
+                          12, now_);
         } else {
             icon::gamepad(ax + boxart::IMG_W / 2.0f, ay + boxart::IMG_H / 2.0f,
                           56, color::card_hi, color::text_faint);
@@ -1956,9 +1968,7 @@ void MoonlightUi::apps_draw_bottom() {
         float art_h = boxart::IMG_H * ART_SCALE;
         float ax = x + (APP_W - art_w) / 2.0f;
         float ay = y + 3.0f;
-        if (sel) {
-            rrect(ax - 3, ay - 3, art_w + 6, art_h + 6, 5, color::accent);
-        } else if (running) {
+        if (running && !sel) {
             rrect(ax - 2, ay - 2, art_w + 4, art_h + 4, 4, color::ok);
         }
         if (app.art_state == AppEntry::ArtState::Ready) {
@@ -1966,13 +1976,15 @@ void MoonlightUi::apps_draw_bottom() {
         } else {
             rect(ax, ay, art_w, art_h, sel ? color::card_hi : color::card);
             if (app.art_state == AppEntry::ArtState::Loading) {
-                icon::spinner(ax + art_w / 2.0f, ay + art_h / 2.0f, 8,
-                              color::accent, now_);
+                icon::spinner(ax + art_w / 2.0f, ay + art_h / 2.0f, 8, now_);
             } else {
                 icon::gamepad(ax + art_w / 2.0f, ay + art_h / 2.0f, 36,
                               sel ? color::card : color::card_hi,
                               color::text_faint);
             }
+        }
+        if (sel) {
+            rainbow_frame(ax - 4, ay - 4, art_w + 8, art_h + 8, 6, 2.5f);
         }
         if (running) {
             circle(ax + art_w - 8, ay + 8, 8, color::ok);
@@ -1984,7 +1996,7 @@ void MoonlightUi::apps_draw_bottom() {
 
     if (apps_.empty()) {
         if (pending_apps_) {
-            icon::spinner(BOT_W / 2.0f, 120.0f, 16, color::accent, now_);
+            icon::spinner(BOT_W / 2.0f, 120.0f, 16, now_);
         } else {
             text("No apps", BOT_W / 2.0f, 120.0f, 0.45f, color::text_dim,
                  C2D_AlignCenter);

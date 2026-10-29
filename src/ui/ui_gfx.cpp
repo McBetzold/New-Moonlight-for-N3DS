@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <utility>
 
 namespace ui {
 
@@ -33,6 +34,7 @@ static C3D_RenderTarget *g_top = nullptr;
 static C3D_RenderTarget *g_bottom = nullptr;
 static C2D_TextBuf g_text_buf = nullptr;
 static C2D_TextBuf g_measure_buf = nullptr;
+static u64 g_frame_time = 0;
 
 u32 with_alpha(u32 color, u8 alpha) {
     return (color & 0x00FFFFFFu) | ((u32)alpha << 24);
@@ -83,7 +85,9 @@ bool gfx_init() {
         C3D_BindProgram(&g_scratch_program);
     }
 
-    if (!C2D_Init(C2D_DEFAULT_MAX_OBJECTS)) {
+    // The sky, rainbow frames and outlined lettering add a few hundred
+    // objects per frame to pages that were already text heavy
+    if (!C2D_Init(2 * C2D_DEFAULT_MAX_OBJECTS)) {
         C3D_Fini();
         return false;
     }
@@ -157,6 +161,7 @@ void gfx_fini() {
 bool gfx_ready() { return g_ready && !aptShouldClose(); }
 
 void frame_begin() {
+    g_frame_time = osGetTime();
     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
     C2D_TextBufClear(g_text_buf);
 }
@@ -336,13 +341,26 @@ void rrect(float x, float y, float w, float h, float radius, u32 color) {
         rect(x, y, w, h, color);
         return;
     }
+    // Three rectangles and four quarter-circle fans that do not overlap, so
+    // translucent colours (panels over the sky) blend evenly
     rect(x + radius, y, w - 2 * radius, h, color);
     rect(x, y + radius, radius, h - 2 * radius, color);
     rect(x + w - radius, y + radius, radius, h - 2 * radius, color);
-    circle(x + radius, y + radius, radius, color);
-    circle(x + w - radius, y + radius, radius, color);
-    circle(x + radius, y + h - radius, radius, color);
-    circle(x + w - radius, y + h - radius, radius, color);
+    const float corners[4][3] = {
+        {x + radius, y + radius, (float)M_PI},
+        {x + w - radius, y + radius, 1.5f * (float)M_PI},
+        {x + w - radius, y + h - radius, 0.0f},
+        {x + radius, y + h - radius, (float)M_PI_2}};
+    const int steps = std::max(3, std::min(8, (int)radius / 2));
+    for (auto &c : corners) {
+        for (int i = 0; i < steps; i++) {
+            float a0 = c[2] + (float)M_PI_2 * (float)i / (float)steps;
+            float a1 = c[2] + (float)M_PI_2 * (float)(i + 1) / (float)steps;
+            triangle(c[0], c[1], c[0] + radius * std::cos(a0),
+                     c[1] + radius * std::sin(a0), c[0] + radius * std::cos(a1),
+                     c[1] + radius * std::sin(a1), color);
+        }
+    }
 }
 
 void rrect_outline(float x, float y, float w, float h, float radius,
@@ -371,6 +389,18 @@ void rrect_outline(float x, float y, float w, float h, float radius,
     }
 }
 
+// An opaque colour that looks like `c` over the sky: icons cut their holes
+// with the colour behind them, and a translucent one would let the icon
+// show through
+static u32 solid(u32 c) {
+    u8 a = (u8)(c >> 24);
+    if (a == 0xFF) {
+        return c;
+    }
+    u32 sky = mix(color::bg, color::sky_mid, 0.5f);
+    return with_alpha(mix(sky, with_alpha(c, 0xFF), a / 255.0f), 0xFF);
+}
+
 void circle(float cx, float cy, float radius, u32 color) {
     if (radius <= 0)
         return;
@@ -380,7 +410,7 @@ void circle(float cx, float cy, float radius, u32 color) {
 void ring(float cx, float cy, float radius, float thickness, u32 color,
           u32 hole_color) {
     circle(cx, cy, radius, color);
-    circle(cx, cy, radius - thickness, hole_color);
+    circle(cx, cy, radius - thickness, solid(hole_color));
 }
 
 void line(float x0, float y0, float x1, float y1, float thickness,
@@ -402,11 +432,289 @@ float pill(float x, float y, const std::string &label, float scale, u32 fill,
     return w;
 }
 
+// ---- The New Moonlight look -------------------------------------------------
+
+u64 frame_time() { return g_frame_time; }
+
+// The wheel's colours: pink, orange, yellow, green, teal, blue, violet
+static const u32 RAINBOW[] = {rgba(0xf0, 0x6a, 0x7a), rgba(0xf6, 0xa4, 0x50),
+                              rgba(0xf6, 0xe0, 0x5a), rgba(0x7c, 0xd6, 0x6c),
+                              rgba(0x5c, 0xc8, 0xe0), rgba(0x6a, 0x8c, 0xf0),
+                              rgba(0xb0, 0x78, 0xf0)};
+static const int RAINBOW_N = sizeof(RAINBOW) / sizeof(RAINBOW[0]);
+
+u32 rainbow(float t) {
+    t -= std::floor(t);
+    float f = t * RAINBOW_N;
+    int i = std::min(RAINBOW_N - 1, (int)f);
+    return mix(RAINBOW[i], RAINBOW[(i + 1) % RAINBOW_N], f - (float)i);
+}
+
+// How far into a repeating period of period_ms the frame is (0..1). Kept
+// small on purpose: osGetTime() counts from 1900, far beyond what a float
+// holds to the millisecond.
+static float cycle(u64 period_ms) {
+    return (float)(g_frame_time % period_ms) / (float)period_ms;
+}
+
+namespace {
+struct Star {
+    float x, y, r, phase, rate;
+    bool sparkle;
+};
+struct Wisp {
+    float cx, cy, rx, ry;
+    u32 color;
+};
+} // namespace
+
+static const u32 NEBULA_PINK = rgba(0xe7, 0xa6, 0xd7);
+static const u32 NEBULA_LAVENDER = rgba(0xb8, 0xa6, 0xe8);
+static const u32 NEBULA_TEAL = rgba(0x7f, 0xd3, 0xd8);
+// as on the banner: faint wisps near the corners
+static const Wisp WISPS_TOP[] = {{70, 66, 84, 50, NEBULA_PINK},
+                                 {345, 66, 72, 44, NEBULA_LAVENDER},
+                                 {60, 194, 72, 42, NEBULA_TEAL},
+                                 {340, 196, 84, 48, NEBULA_PINK}};
+static const Wisp WISPS_BOTTOM[] = {{56, 70, 72, 44, NEBULA_LAVENDER},
+                                    {272, 190, 80, 46, NEBULA_TEAL},
+                                    {250, 56, 60, 36, NEBULA_PINK}};
+
+static std::vector<Star> make_stars(float w, float h, int dots, int sparkles,
+                                    u32 seed) {
+    auto rnd = [&seed]() {
+        seed = seed * 1664525u + 1013904223u;
+        return (float)(seed >> 8) / (float)(1u << 24);
+    };
+    std::vector<Star> stars;
+    for (int i = 0; i < dots + sparkles; i++) {
+        Star s;
+        s.sparkle = i >= dots;
+        s.x = rnd() * w;
+        s.y = rnd() * h;
+        s.r = s.sparkle ? 3.0f + rnd() * 2.5f : 0.7f + rnd() * 0.6f;
+        s.phase = rnd();
+        s.rate = 0.15f + rnd() * 0.35f; // twinkles per second
+        stars.push_back(s);
+    }
+    return stars;
+}
+
+void sky(Screen screen) {
+    static const std::vector<Star> top_stars =
+        make_stars(TOP_W, TOP_H, 48, 6, 21);
+    static const std::vector<Star> bottom_stars =
+        make_stars(BOT_W, BOT_H, 36, 4, 5);
+    bool top = screen == Screen::Top;
+    float w = top ? TOP_W : BOT_W;
+    float h = top ? TOP_H : BOT_H;
+
+    // darkest at the top and bottom edges, deep indigo across the middle
+    float mid = h * 0.55f;
+    rect_gradient_v(0, 0, w, mid, color::bg, color::sky_mid);
+    rect_gradient_v(0, mid, w, h - mid, color::sky_mid, color::bg);
+
+    // nebula wisps: stacked faint ellipses, brightest in the middle
+    const Wisp *wisps = top ? WISPS_TOP : WISPS_BOTTOM;
+    int wisp_count = top ? (int)(sizeof(WISPS_TOP) / sizeof(Wisp))
+                         : (int)(sizeof(WISPS_BOTTOM) / sizeof(Wisp));
+    for (int i = 0; i < wisp_count; i++) {
+        const Wisp &n = wisps[i];
+        for (int k = 0; k < 6; k++) {
+            float f = 1.0f - 0.16f * (float)k;
+            C2D_DrawEllipseSolid(n.cx - n.rx * f, n.cy - n.ry * f, 0.0f,
+                                 2 * n.rx * f, 2 * n.ry * f,
+                                 with_alpha(n.color, 7));
+        }
+    }
+
+    // twinkling stars; a few are four-pointed sparkles like the banner's
+    float t = (float)(g_frame_time % 600000) / 1000.0f;
+    for (const Star &s : top ? top_stars : bottom_stars) {
+        float b = 0.5f + 0.5f * std::sin(2.0f * (float)M_PI *
+                                         (t * s.rate + s.phase));
+        if (!s.sparkle) {
+            circle(s.x, s.y, s.r,
+                   with_alpha(color::silver, (u8)(60 + 160 * b)));
+            continue;
+        }
+        float len = s.r * (0.45f + 0.55f * b);
+        u32 c = with_alpha(color::white, (u8)(40 + 200 * b));
+        circle(s.x, s.y, len * 0.7f,
+               with_alpha(color::accent_text, (u8)(24 * b)));
+        line(s.x - len, s.y, s.x + len, s.y, 1.0f, c);
+        line(s.x, s.y - len, s.x, s.y + len, 1.0f, c);
+        circle(s.x, s.y, 1.1f, c);
+    }
+}
+
+void panel(float x, float y, float w, float h, float radius) {
+    rrect(x, y, w, h, radius, color::glass);
+    // a metallic highlight along the top edge
+    rect(x + radius, y, w - 2 * radius, 1, with_alpha(color::white, 0x38));
+}
+
+void rainbow_bar(float x, float y, float w, float h) {
+    const int segments = 14;
+    float phase = cycle(12000);
+    for (int i = 0; i < segments; i++) {
+        float x0 = x + w * (float)i / segments;
+        float x1 = x + w * (float)(i + 1) / segments;
+        u32 c0 = rainbow(phase + (float)i / segments);
+        u32 c1 = rainbow(phase + (float)(i + 1) / segments);
+        C2D_DrawRectangle(x0, y, 0.0f, x1 - x0, h, c0, c1, c0, c1);
+    }
+}
+
+void rainbow_frame(float x, float y, float w, float h, float radius,
+                   float thickness) {
+    // the outline's centre line: a rounded rectangle inset by half the
+    // thickness, walked clockwise from the top-left corner
+    float half = thickness / 2.0f;
+    x += half;
+    y += half;
+    w -= thickness;
+    h -= thickness;
+    radius = std::max(0.0f, std::min(radius - half, std::min(w, h) / 2.0f));
+    std::vector<std::pair<float, float>> pts;
+    pts.reserve(64);
+    auto corner = [&](float cx, float cy, float a0) {
+        for (int i = 0; i <= 4; i++) {
+            float a = a0 + (float)M_PI_2 * (float)i / 4.0f;
+            pts.push_back(
+                {cx + radius * std::cos(a), cy + radius * std::sin(a)});
+        }
+    };
+    auto edge = [&](float x0, float y0, float x1, float y1) {
+        int n = std::max(1, (int)(std::hypot(x1 - x0, y1 - y0) / 14.0f));
+        for (int i = 1; i < n; i++) {
+            float k = (float)i / (float)n;
+            pts.push_back({x0 + (x1 - x0) * k, y0 + (y1 - y0) * k});
+        }
+    };
+    corner(x + radius, y + radius, (float)M_PI);
+    edge(x + radius, y, x + w - radius, y);
+    corner(x + w - radius, y + radius, 1.5f * (float)M_PI);
+    edge(x + w, y + radius, x + w, y + h - radius);
+    corner(x + w - radius, y + h - radius, 0.0f);
+    edge(x + w - radius, y + h, x + radius, y + h);
+    corner(x + radius, y + h - radius, (float)M_PI_2);
+    edge(x, y + h - radius, x, y + radius);
+
+    size_t n = pts.size();
+    std::vector<float> along(n + 1, 0.0f);
+    for (size_t i = 0; i < n; i++) {
+        const auto &a = pts[i];
+        const auto &b = pts[(i + 1) % n];
+        along[i + 1] =
+            along[i] + std::hypot(b.first - a.first, b.second - a.second);
+    }
+    if (along[n] <= 0.0f) {
+        return;
+    }
+    float phase = cycle(8000);
+    for (size_t i = 0; i < n; i++) {
+        const auto &a = pts[i];
+        const auto &b = pts[(i + 1) % n];
+        u32 c0 = rainbow(phase + along[i] / along[n]);
+        u32 c1 = rainbow(phase + along[i + 1] / along[n]);
+        // round joints, so the corners have no gaps
+        circle(a.first, a.second, half, c0);
+        if (along[i + 1] - along[i] > 0.01f) {
+            C2D_DrawLine(a.first, a.second, c0, b.first, b.second, c1,
+                         thickness, 0.0f);
+        }
+    }
+}
+
+void wheel(float cx, float cy, float r, float angle) {
+    const float two_pi = 2.0f * (float)M_PI;
+    const int segments = r >= 20.0f ? 48 : 24;
+    const float inner = r * 0.80f;
+    // the ring, its colours fixed to the wheel as it turns
+    for (int i = 0; i < segments; i++) {
+        float t0 = (float)i / segments, t1 = (float)(i + 1) / segments;
+        float a0 = angle + two_pi * t0, a1 = angle + two_pi * t1;
+        u32 c0 = rainbow(t0), c1 = rainbow(t1);
+        float ox0 = cx + r * std::cos(a0), oy0 = cy + r * std::sin(a0);
+        float ox1 = cx + r * std::cos(a1), oy1 = cy + r * std::sin(a1);
+        float ix0 = cx + inner * std::cos(a0), iy0 = cy + inner * std::sin(a0);
+        float ix1 = cx + inner * std::cos(a1), iy1 = cy + inner * std::sin(a1);
+        C2D_DrawTriangle(ox0, oy0, c0, ox1, oy1, c1, ix1, iy1, c1, 0.0f);
+        C2D_DrawTriangle(ox0, oy0, c0, ix1, iy1, c1, ix0, iy0, c0, 0.0f);
+    }
+    // eight spokes, silver at the hub and the ring's colour where they meet
+    // it
+    float thickness = std::max(1.5f, r * 0.11f);
+    for (int k = 0; k < 8; k++) {
+        float t = (float)k / 8.0f;
+        float a = angle + two_pi * t;
+        float dx = std::cos(a), dy = std::sin(a);
+        C2D_DrawLine(cx + dx * r * 0.18f, cy + dy * r * 0.18f, color::silver,
+                     cx + dx * inner * 1.02f, cy + dy * inner * 1.02f,
+                     rainbow(t), thickness, 0.0f);
+    }
+    circle(cx, cy, r * 0.22f, color::silver);
+    circle(cx, cy, r * 0.12f, mix(color::silver, color::sky_mid, 0.45f));
+}
+
+void logo_wheel(float cx, float cy, float r) {
+    wheel(cx, cy, r, 2.0f * (float)M_PI * cycle(20000));
+}
+
+static const u32 EDGE_DARK = rgba(0x08, 0x08, 0x18);
+static const float AROUND[8][2] = {{-1, -1}, {0, -1}, {1, -1}, {-1, 0},
+                                   {1, 0},   {-1, 1}, {0, 1},  {1, 1}};
+
+void silver_text(const std::string &str, float x, float y, float scale,
+                 u32 align) {
+    float d = std::max(1.0f, scale * 1.6f);
+    for (auto &o : AROUND) {
+        text(str, x + o[0] * d, y + o[1] * d, scale, EDGE_DARK, align);
+    }
+    text(str, x, y, scale, color::silver, align);
+}
+
+static float logo_edge(float scale) { return std::max(1.0f, scale * 1.8f); }
+
+float logo_text_width(const std::string &str, float scale) {
+    return text_width(str, scale) + 4.0f * logo_edge(scale);
+}
+
+float logo_text(const std::string &str, float x, float y, float scale,
+                int red_index) {
+    float d = logo_edge(scale);
+    float cx = x + 2.0f * d;
+    int letter = 0;
+    for (size_t i = 0; i < str.size();) {
+        size_t next = utf8_next(str, i);
+        std::string ch = str.substr(i, next - i);
+        float w = text_width(ch, scale);
+        if (ch != " ") {
+            u32 outline = rainbow((float)letter / RAINBOW_N);
+            for (auto &o : AROUND) {
+                text(ch, cx + o[0] * 2.0f * d, y + o[1] * 2.0f * d, scale,
+                     outline);
+            }
+            for (auto &o : AROUND) {
+                text(ch, cx + o[0] * d, y + o[1] * d, scale, EDGE_DARK);
+            }
+            text(ch, cx, y, scale,
+                 (int)i == red_index ? color::red : color::silver);
+            letter++;
+        }
+        cx += w;
+        i = next;
+    }
+    return cx + 2.0f * d - x;
+}
+
 // ---- Icons ----------------------------------------------------------------
 
 namespace icon {
 
 void moon(float cx, float cy, float r, u32 color, u32 bg) {
+    bg = solid(bg);
     circle(cx, cy, r, color);
     circle(cx + r * 0.42f, cy - r * 0.30f, r * 0.80f, bg);
     // a small star
@@ -425,6 +733,7 @@ void desktop(float cx, float cy, float size, u32 color) {
 }
 
 void gear(float cx, float cy, float r, u32 color, u32 bg) {
+    bg = solid(bg);
     const float hw = r * 0.24f;
     for (int i = 0; i < 8; i++) {
         float a = (float)i * (float)M_PI / 4.0f;
@@ -449,6 +758,7 @@ void plus(float cx, float cy, float size, float thickness, u32 color) {
 }
 
 void lock(float cx, float cy, float size, u32 color, u32 bg) {
+    bg = solid(bg);
     ring(cx, cy - size * 0.12f, size * 0.27f, size * 0.10f, color, bg);
     float bw = size * 0.74f, bh = size * 0.52f;
     rrect(cx - bw / 2, cy - size * 0.04f, bw, bh, size * 0.08f, color);
@@ -473,6 +783,7 @@ void stop(float cx, float cy, float size, u32 color) {
 }
 
 void refresh(float cx, float cy, float r, u32 color, u32 bg) {
+    bg = solid(bg);
     ring(cx, cy, r, r * 0.30f, color, bg);
     // Cut a gap in the upper-right quadrant and put an arrow head on it.
     triangle(cx, cy, cx + r * 1.3f, cy - r * 1.3f, cx + r * 1.3f, cy, bg);
@@ -528,18 +839,10 @@ void wifi_off(float cx, float cy, float size, u32 color) {
     cross(cx, cy, size * 0.9f, color);
 }
 
-void spinner(float cx, float cy, float r, u32 color, u64 time_ms) {
-    const int dot_count = 8;
-    int phase = (int)((time_ms / 90) % dot_count);
-    float dot_r = std::max(1.5f, r * 0.22f);
-    for (int i = 0; i < dot_count; i++) {
-        int k = (i - phase + dot_count) % dot_count;
-        float alpha = 1.0f - (float)k / (float)dot_count;
-        float a = (float)i * 2.0f * (float)M_PI / (float)dot_count;
-        float px = cx + std::cos(a) * r;
-        float py = cy + std::sin(a) * r;
-        circle(px, py, dot_r, with_alpha(color, (u8)(40 + 215 * alpha)));
-    }
+void spinner(float cx, float cy, float r, u64 time_ms) {
+    // one turn per 1.5 s
+    wheel(cx, cy, r * 1.15f,
+          2.0f * (float)M_PI * (float)(time_ms % 1500) / 1500.0f);
 }
 
 } // namespace icon
@@ -548,12 +851,17 @@ float hint(float x, float y, const char *button, const std::string &label,
            float scale, u32 label_color) {
     float lh = line_height(scale);
     float r = lh * 0.55f;
-    float cx = x + r, cy = y + lh / 2.0f;
-    circle(cx, cy, r, color::card_hi);
     float glyph_scale = scale * 0.85f;
-    text(button, cx, cy - line_height(glyph_scale) / 2.0f, glyph_scale,
-         color::text, C2D_AlignCenter);
-    float lx = x + 2 * r + 4.0f;
+    // a silver button, round for one letter and a pill for START/SELECT,
+    // with a shine on its top half
+    float gw = std::max(2 * r, text_width(button, glyph_scale) + 8.0f);
+    float cy = y + lh / 2.0f;
+    rrect(x, cy - r, gw, 2 * r, r, color::silver);
+    rrect(x + 1, cy - r + 1, gw - 2, r - 1, r - 1,
+          with_alpha(color::white, 0x60));
+    text(button, x + gw / 2.0f, cy - line_height(glyph_scale) / 2.0f,
+         glyph_scale, color::bg, C2D_AlignCenter);
+    float lx = x + gw + 4.0f;
     text(label, lx, y, scale, label_color);
     return lx + text_width(label, scale) + 14.0f;
 }

@@ -322,14 +322,15 @@ void MoonlightUi::show_guide(const std::string &title, const GuidePage *pages,
 
         // ---- top screen: the page
         scene(Screen::Top, color::bg);
+        sky(Screen::Top);
         draw_header(title,
                     "Page " + std::to_string(page + 1) + " of " +
                         std::to_string(count),
                     true);
-        rrect(CARD_X, CARD_Y, CARD_W, CARD_BOTTOM - CARD_Y, 8, color::surface);
-        rect(CARD_X + 8, CARD_Y, CARD_W - 16, 3, color::accent);
-        text(ellipsize(pages[page].title, TITLE_SCALE, TEXT_W), TEXT_X,
-             CARD_Y + 10.0f, TITLE_SCALE, color::accent_text);
+        panel(CARD_X, CARD_Y, CARD_W, CARD_BOTTOM - CARD_Y, 8);
+        rainbow_bar(CARD_X + 8, CARD_Y, CARD_W - 16, 3);
+        silver_text(ellipsize(pages[page].title, TITLE_SCALE, TEXT_W), TEXT_X,
+                    CARD_Y + 10.0f, TITLE_SCALE);
 
         const float lh = line_height(BODY_SCALE);
         const float bottom = CARD_BOTTOM - 6.0f;
@@ -374,6 +375,7 @@ void MoonlightUi::show_guide(const std::string &title, const GuidePage *pages,
 
         // ---- touch screen: contents and navigation
         scene(Screen::Bottom, color::bg);
+        sky(Screen::Bottom);
         for (int i = 0; i < count; i++) {
             float x, ry, w, h;
             toc_row_rect(i, x, ry, w, h);
@@ -384,7 +386,7 @@ void MoonlightUi::show_guide(const std::string &title, const GuidePage *pages,
             }
             rrect(x, ry, w, h, 4, fill);
             if (sel) {
-                rect(x, ry + 3, 3, h - 6, color::accent);
+                rainbow_frame(x, ry, w, h, 4, 2.0f);
             }
             float ts = 0.4f;
             float ty = ry + (h - line_height(ts)) / 2.0f;
