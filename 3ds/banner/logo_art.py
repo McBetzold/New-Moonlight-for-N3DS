@@ -211,19 +211,25 @@ WHEEL_ART = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 _ART_C, _RING_IN, _RING_OUT, _SPOKE_HALF, _HUB = 511.5, 401.0, 445.5, 21.5, 34.0
 
 
-_wheel_art_cache = None
+_wheel_art_cache = {}
 
 
-def wheel_art(size):
-    """The artwork wheel with everything but the ring and spokes made
-    transparent, framed like wheel() (ring edge at 0.49 of the image)."""
-    global _wheel_art_cache
-    if _wheel_art_cache is None:
-        _wheel_art_cache = _cut_out_wheel()
-    return _wheel_art_cache.resize((size, size), Image.LANCZOS)
+def wheel_art(size, ring_only=False):
+    """The artwork wheel with everything but the ring and spokes (or only
+    the ring) made transparent, framed like wheel() (ring edge at 0.49 of
+    the image)."""
+    if ring_only not in _wheel_art_cache:
+        _wheel_art_cache[ring_only] = _cut_out_wheel(ring_only)
+    return _wheel_art_cache[ring_only].resize((size, size), Image.LANCZOS)
 
 
-def _cut_out_wheel():
+# where the spokes end and how wide they are, as fractions of the ring's
+# outer radius (for drawing spokes as geometry)
+SPOKE_END = _RING_IN / (_RING_OUT + 0.5)
+SPOKE_WIDTH = 2 * _SPOKE_HALF / (_RING_OUT + 0.5)
+
+
+def _cut_out_wheel(ring_only=False):
     src = Image.open(WHEEL_ART).convert("RGB")
     n = src.width
     mask = Image.new("L", (n, n))
@@ -245,7 +251,7 @@ def _cut_out_wheel():
                     across = abs(dx * cy - dy * cx)
                     spoke = max(spoke, min(1.0, max(0.0, _SPOKE_HALF + 0.5 - across)))
                 hub = max(0.0, min(1.0, _HUB + 0.5 - r))
-                cov = max(ring, min(edge_out, max(spoke, hub)))
+                cov = ring if ring_only else max(ring, min(edge_out, max(spoke, hub)))
             mp[x, y] = int(255 * cov)
     im = src.convert("RGBA")
     im.putalpha(mask)
