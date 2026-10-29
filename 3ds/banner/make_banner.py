@@ -1,62 +1,35 @@
 """Builds the 3D HOME Menu banner of New Moonlight for N3DS as a glTF scene
 (banner.glb), plus the app icon and the flat fallback banner.
 
-The scene is converted to CGFX with pycgfx (https://github.com/skyfloogle/pycgfx)
-and packed into the CIA by bannertool (see README.md next to this file). The
-logo artwork itself is drawn by logo_art.py.
-
     python make_banner.py [--out DIR] [--preview] [--assets DIR]
+    python convert.py PATH_TO_PYCGFX banner.glb ../res/banner.cgfx
 
-Scene (glTF units, camera from pycgfx's banner-camera.gltf: position
-(0, 1, 44.786), looking down -Z, 30 degree vertical FOV, 5:3, near 26.5,
-so nothing may come closer than z = 18):
-  * a night-sky backdrop far behind everything (z = -16)
-  * 23 stars that twinkle, from deep behind the screen (z = -12) to well in
-    front of it (z = 15), kept out of the logo and title areas
-  * the wheel (Isaac's artwork, wheel_art.jpg, with the gaps between the
-    spokes cut out) spinning in place out of the screen (z = 10)
-  * the silver "new" and its dashes, fixed, just in front of it (z = 11)
-  * "Moonlight / for N3DS", fixed, popping out at z = 9
-  Things are placed by their top-screen pixel position and scaled with
-  their depth, so moving something closer keeps its place on screen.
+convert.py turns the scene into CGFX with pycgfx and applies the fixes a
+real HOME Menu needs (see its docstring). The logo artwork is drawn by
+logo_art.py.
 
-THE HOME MENU TURNS EVERY 3D BANNER about a vertical axis by itself, like
-a turntable (the model vanishes while it faces away). The whole scene hangs
-under one root node that convert.py sets to a Y-axial billboard (pycgfx
-cannot express billboards in glTF), which keeps it facing the viewer.
+The layout follows banners known to work on the HOME Menu (Pokemon Y's, and
+GabeSud0/pokeplatinum-3ds's, found over ~30 hardware tests; build_scene()
+has the node tree):
+  * The HOME Menu turns every 3D banner one full turn per 10 s about the
+    vertical axis. "autorotate" turns the other way at the same rate, so
+    the wheel and stars under it stay still; the backdrop, "new" and the
+    title are screen-facing billboards whose nodes sit at the origin.
+  * Only the area between the HOME Menu's bars is drawn (about y 40 to 212
+    of the 240-pixel screen).
+  * No material animation (unsafe): the stars twinkle by pulsing in size.
+  * No large see-through cards in the middle of the scene (a glow card
+    behind the wheel froze the HOME Menu).
+  * No two textures of the same pixel size (every banner that froze had a
+    pair; check_texture_sizes refuses them), and keep the CGFX near 250 KB.
+  * The HOME Menu may keep showing a title's old banner: delete the title
+    before installing a new build to see the new banner.
 
-Animation notes (pycgfx limitations):
-  * every rotation is stored as Euler angles, and the middle (Y) angle is
-    limited to +-90 degrees, so an animated node must turn around one axis
-    only (nest nodes for more)
-  * an angle must not wrap past +-180 degrees between keys, so the wheel's
-    full turn per loop is split over two nested nodes of just under 180
-    degrees each
-  * a turning node carries no position of its own: the wheel's position is
-    on a parent whose position animation just holds still, so it cannot
-    drift whatever the HOME Menu does with channels an animation leaves out
-  * pycgfx moves every part without a BLEND mesh ahead of the BLEND ones.
-    A banner that needed that reordering (an unanimated empty node among
-    the BLEND meshes) crashed the HOME Menu with a data abort, so the
-    script keeps the nodes in that order itself (check_node_order). The
-    wheel's see-through gaps use an alpha test (MASK), not BLEND, for this
-  * all animations share one loop, so every periodic motion completes a
-    whole number of cycles in LOOP_SECONDS
-  * translucent meshes are drawn in node order, so they are sorted back to
-    front by depth
-  * the HOME Menu light shines straight into the screen and there is no
-    ambient light: faces turned away from the viewer go dark
-
-TEXTURE SIZES: no two textures may have the same pixel size
-(check_texture_sizes). Every banner that froze or crashed the HOME Menu had
-a pair of equal-sized textures; every one that worked did not.
-
-BANNER BUDGET: keep banner.cgfx near 250 KB or less. A 458 KB banner (big
-textures: a 256x256 wheel plus two 256x128 images) froze the whole 3DS when
-the app was selected in the HOME Menu, although pycgfx only warns above
-512 KiB; 220-230 KB banners worked. Textures are RGBA4, 2 bytes per pixel,
-and dominate the size, so keep them small (the wheel is 128x128, the
-backdrop 128x64, the badge 256x64).
+Camera (pycgfx's banner-camera.gltf): position (0, 1, 44.786), looking down
+-Z, 30 degree vertical FOV, 5:3, near plane 26.5, so nothing may come closer
+than z = 18. Things are placed by their top-screen pixel position and scaled
+with their depth, so moving something closer keeps its place on screen.
+Larger z = closer to the viewer = further out of the screen in 3D.
 """
 
 import argparse
@@ -73,9 +46,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import logo_art  # noqa: E402
 
-LOOP_SECONDS = 12.0
-# the root node convert.py turns into a Y-axial billboard
-BILLBOARD_NODE = "Banner"
+LOOP_SECONDS = 10.0  # = the HOME Menu's spin period (AUTOROTATE_SECONDS)
 # how far each of the two nested wheel nodes turns per loop (they add up)
 SPIN_DEG_PER_NODE = 179.9
 # parts to leave out (for finding what the HOME Menu chokes on)
@@ -320,21 +291,42 @@ def px_to_world(px, py, z):
 
 
 # Where things sit on the top screen (400x240 px) and how close they are.
-# Larger z = closer to the viewer = further out of the screen in 3D.
-WHEEL_PX, WHEEL_R_PX, WHEEL_Z = (102, 120), 90, 10.0
+# Larger z = closer to the viewer = further out of the screen in 3D. The
+# HOME Menu only draws between its bars, about y 40 to 212: keep inside.
+WHEEL_PX, WHEEL_R_PX, WHEEL_Z = (102, 126), 80, 10.0
 BADGE_Z = 11.0
-TITLE_PX, TITLE_W_PX, TITLE_Z = (300, 120), 190, 9.0
-KEEP_CLEAR = [  # sparkle-free areas: the logo and the title
+TITLE_PX, TITLE_W_PX, TITLE_Z = (300, 126), 190, 9.0
+VISIBLE_Y = (44, 208)
+KEEP_CLEAR = [  # star-free areas: the logo and the title
     ("circle", WHEEL_PX, WHEEL_R_PX + 10),
-    ("rect", (202, 68, 398, 172)),
+    ("rect", (202, 74, 398, 178)),
 ]
-# star tints: mostly white, some faintly blue or warm
-SPARKLE_COLORS = [(1.0, 1.0, 1.0), (0.82, 0.9, 1.0), (1.0, 0.95, 0.82),
-                  (1.0, 1.0, 1.0), (0.78, 0.86, 1.0), (1.0, 0.92, 0.88)]
+# the HOME Menu's own spin: one turn per this many seconds (= the loop)
+AUTOROTATE_SECONDS = 10.0
+# parts drawn as screen-facing billboards by convert.py (their nodes sit at
+# the origin; the geometry itself is moved into place)
+BILLBOARDS = ("backdrop", "badge", "title")
+
+
+def offset_mesh(mesh, offset):
+    """Moves a mesh's vertices (billboard nodes stay at the origin)."""
+    mesh.pos = [v_add(p, offset) for p in mesh.pos]
+    return mesh
 
 
 def build_scene():
-    roots = []
+    """Laid out like the banners known to work on the HOME Menu (Pokemon Y's,
+    and pokeplatinum-3ds's from ~30 hardware tests):
+      COMMON (root)
+        backdrop      screen billboard, far behind
+        autorotate    turns against the HOME Menu's spin (convert.py writes
+                      its exact curve), so everything under it stays still
+          WheelPosition > wheelspin   the wheel, turning in place
+          StarN > TwinkleN            stars, pulsing in size (no material
+                                      animation: not safe on the HOME Menu)
+        badge         screen billboard ("new" and its dashes)
+        title         screen billboard
+    """
     mats = {}
 
     def mat(*a, **k):
@@ -342,55 +334,31 @@ def build_scene():
         mats[m.name] = m
         return m
 
-    # backdrop, far behind (opaque)
-    bd = mat("Backdrop", texture=make_backdrop(), roughness=1.0)
-    roots.append(Node("Backdrop", quad_mesh(56, 34), bd, t=(0, 1.0, -16)))
+    root = Node("COMMON")
 
-    # translucent pieces, all sorted back to front below
-    blended = []
+    # backdrop: billboard at the origin, geometry far behind
+    bd = mat("backdrop", texture=make_backdrop(), roughness=1.0)
+    root.add(Node("backdrop", offset_mesh(quad_mesh(56, 34), (0, 1.0, -16)), bd))
 
-    # the wheel: Isaac's artwork with the gaps between the spokes cut out
-    # (alpha test, so it is drawn with the opaque meshes). Laid out like the
-    # first banner, which worked on the 3DS: a parent node whose position
-    # is animated (here it just holds still), with the turning nodes inside
-    # it at zero, so the wheel can only turn about its own centre. One full
-    # turn per loop is split over the two nodes so no angle passes 180.
+    autorotate = root.add(Node("autorotate"))
+    autorotate.anim["rotation"] = lambda tm: (0.0, 0.0, 0.0, 1.0)  # convert.py
+
+    # the wheel: Isaac's artwork (gaps between the spokes cut out with an
+    # alpha test), turning in place; convert.py writes the full-turn curve
     k = world_per_pixel(WHEEL_Z)
     wx, wy = px_to_world(WHEEL_PX[0], WHEEL_PX[1], WHEEL_Z)
-    wheel_tex = logo_art.wheel_art(128)  # small textures: see BANNER BUDGET
-    wheel_mat = mat("Wheel", texture=quantize_rgba4(wheel_tex), mask=True)
+    wheel_mat = mat("wheel", texture=quantize_rgba4(logo_art.wheel_art(128)),
+                    mask=True)
     disc = disc_mesh(WHEEL_R_PX * k)
     # logo_art frames the ring edge at 0.49 of the image: map the disc rim there
     disc.uv = [(0.5 + (u - 0.5) * 0.98, 0.5 + (v - 0.5) * 0.98) for u, v in disc.uv]
-    wheel_pos = Node("WheelPosition", t=(wx, wy, WHEEL_Z))
-    wheel_pos.anim["translation"] = lambda tm: (wx, wy, WHEEL_Z)
-    spin_a = wheel_pos.add(Node("WheelSpinA"))
-    spin_a.anim["rotation"] = lambda tm: quat_axis(
-        (0, 0, 1), -math.radians(SPIN_DEG_PER_NODE) * tm / LOOP_SECONDS)
-    spin_b = spin_a.add(Node("WheelSpinB", disc, wheel_mat))
-    spin_b.anim["rotation"] = spin_a.anim["rotation"]
-    roots.append(wheel_pos)
+    wheel_pos = autorotate.add(Node("WheelPosition", t=(wx, wy, WHEEL_Z)))
+    spin = wheel_pos.add(Node("wheelspin", disc, wheel_mat))
+    spin.anim["rotation"] = lambda tm: quat_axis(
+        (0, 0, 1), -2 * math.pi * tm / LOOP_SECONDS)  # preview; convert.py
 
-    # (no glow behind the wheel: its 32x32 texture matched the star's size,
-    # see check_texture_sizes)
-
-    # stars, all twinkling, from deep in the sky to out in front of the screen
-    sparkle = make_sparkle()
-    twinklers = []
-    for i in range(len(SPARKLE_COLORS)):
-        color = SPARKLE_COLORS[i]
-        phase = i / float(len(SPARKLE_COLORS))
-        cycles = 2 + (i % 3)
-
-        # brightness and opacity together, (b, b, b, b), as in the banners
-        # that worked on the 3DS
-        def anim(tm, phase=phase, cycles=cycles):
-            s = 0.5 + 0.5 * math.sin(
-                2 * math.pi * (cycles * tm / LOOP_SECONDS + phase))
-            b = 0.08 + 0.92 * s * s
-            return (b, b, b, b)
-        twinklers.append(mat("Star%d" % i, texture=sparkle, blend=True,
-                             color_anim=anim))
+    # stars: twinkle by pulsing in size
+    star_mat = mat("star", texture=make_sparkle(), blend=True)
 
     def clear(px, py, pad):
         for kind, a, *rest in KEEP_CLEAR:
@@ -403,71 +371,75 @@ def build_scene():
 
     rnd = random.Random(5)
     placed = []
-    # (count, depth range, apparent size in px)
-    for count, (z0, z1), (s0, s1) in [(9, (-12, -6), (8, 11)),
-                                      (6, (-4, 3), (10, 14)),
-                                      (8, (5, 15), (13, 19))]:
+    stars = []
+    for count, (z0, z1), (s0, s1) in [(5, (-12, -6), (8, 11)),
+                                      (4, (-4, 3), (10, 14)),
+                                      (5, (5, 15), (13, 19))]:
         n = tries = 0
         while n < count and tries < 3000:
             tries += 1
-            px, py = rnd.uniform(8, 392), rnd.uniform(8, 232)
+            px = rnd.uniform(8, 392)
+            py = rnd.uniform(VISIBLE_Y[0] + 6, VISIBLE_Y[1] - 6)
             size_px = rnd.uniform(s0, s1)
             if not clear(px, py, size_px / 2):
                 continue
-            if any(math.hypot(px - qx, py - qy) < 24 for qx, qy in placed):
+            if any(math.hypot(px - qx, py - qy) < 26 for qx, qy in placed):
                 continue
             z = rnd.uniform(z0, z1)
             x, y = px_to_world(px, py, z)
-            size = size_px * world_per_pixel(z)
-            m = twinklers[len(placed) % len(twinklers)]
-            blended.append((z, Node("Sparkle%02d" % len(placed),
-                                    quad_mesh(size, size), m, t=(x, y, z))))
+            stars.append((z, x, y, size_px * world_per_pixel(z)))
             placed.append((px, py))
             n += 1
+    stars.sort()  # back to front: translucent meshes draw in node order
+    for i, (z, x, y, size) in enumerate(stars):
+        pos = autorotate.add(Node("Star%02d" % i, t=(x, y, z)))
+        tw = pos.add(Node("Twinkle%02d" % i, quad_mesh(size, size), star_mat))
+        phase, cycles = (i * 0.37) % 1.0, 2 + (i % 3)
 
-    # "new" and its dashes, fixed in front of the spinning wheel (same layout
-    # as logo_art.logo_mark: 0.88 of the wheel image wide, centre 3% above)
+        def scale(tm, phase=phase, cycles=cycles):
+            s_ = 0.5 + 0.5 * math.sin(
+                2 * math.pi * (cycles * tm / LOOP_SECONDS + phase))
+            v = 0.15 + 0.85 * s_ * s_
+            return (v, v, v)
+        tw.anim["scale"] = scale
+
+    # "new" and its dashes, and the title: billboards at the origin
     img_px = WHEEL_R_PX / 0.49
     kb = world_per_pixel(BADGE_Z)
     bw_px = 0.88 * img_px
     bx, by = px_to_world(WHEEL_PX[0], WHEEL_PX[1] - 0.03 * img_px, BADGE_Z)
-    badge = mat("Badge", texture=quantize_rgba4(logo_art.new_badge(256, 64)),
+    badge = mat("badge", texture=quantize_rgba4(logo_art.new_badge(256, 64)),
                 blend=True)
-    blended.append((BADGE_Z, Node("Badge", quad_mesh(bw_px * kb, bw_px * kb / 4),
-                                  badge, t=(bx, by, BADGE_Z))))
-
+    root.add(Node("badge", offset_mesh(quad_mesh(bw_px * kb, bw_px * kb / 4),
+                                       (bx, by, BADGE_Z)), badge))
     kt = world_per_pixel(TITLE_Z)
     tx, ty = px_to_world(TITLE_PX[0], TITLE_PX[1], TITLE_Z)
-    title = mat("Title", texture=quantize_rgba4(logo_art.title_block(256, 128)),
+    title = mat("title", texture=quantize_rgba4(logo_art.title_block(256, 128)),
                 blend=True)
-    blended.append((TITLE_Z, Node("Title", quad_mesh(TITLE_W_PX * kt,
-                                                     TITLE_W_PX * kt / 2),
-                                  title, t=(tx, ty, TITLE_Z))))
+    root.add(Node("title", offset_mesh(quad_mesh(TITLE_W_PX * kt,
+                                                 TITLE_W_PX * kt / 2),
+                                       (tx, ty, TITLE_Z)), title))
 
-    # pycgfx draws translucent meshes in node order: back to front
-    blended.sort(key=lambda b: b[0])
-    roots += [n for _, n in blended]
+    roots = [root]
     if OMIT:
-        prefixes = {"wheel": "WheelPosition", "halo": "Halo", "stars": "Sparkle",
-                    "badge": "Badge", "title": "Title", "backdrop": "Backdrop"}
-        drop = tuple(prefixes[o] for o in OMIT)
-        roots = [n for n in roots if not n.name.startswith(drop)]
+        drop = {"wheel": ("WheelPosition",), "stars": ("Star",),
+                "badge": ("badge",), "title": ("title",),
+                "backdrop": ("backdrop",)}
+        names = tuple(x for o in OMIT for x in drop[o])
+
+        def prune(n):
+            n.children = [c for c in n.children if not c.name.startswith(names)]
+            for c in n.children:
+                prune(c)
+        prune(root)
         used = set()
-        stack = list(roots)
+        stack = [root]
         while stack:
             n = stack.pop()
             if n.material is not None:
                 used.add(n.material.name)
             stack.extend(n.children)
-        mats = {k: v for k, v in mats.items() if k in used}
-    # Everything hangs under one node, "Banner", which convert.py sets to a
-    # Y-axial billboard: the HOME Menu turns every 3D banner about a
-    # vertical axis by itself, and the billboard keeps the scene facing the
-    # viewer through that turn.
-    banner = Node(BILLBOARD_NODE)
-    banner.children = roots
-    roots = [banner]
-    check_node_order(roots)
+        mats = {k_: v for k_, v in mats.items() if k_ in used}
     check_texture_sizes(mats)
     return roots, mats
 
@@ -485,21 +457,6 @@ def check_texture_sizes(mats):
     dup = [size for size, texs in sizes.items() if len(texs) > 1]
     if dup:
         sys.exit("textures share a size %s; make them different" % dup)
-
-
-def check_node_order(roots):
-    """pycgfx moves every part without a BLEND mesh ahead of the BLEND ones.
-    The banner that did need reordering crashed the HOME Menu, so the scene
-    must already be in that order."""
-    seen_blend = False
-    stack = list(reversed(roots))
-    while stack:
-        n = stack.pop()
-        blend = n.mesh is not None and n.material.blend
-        if seen_blend and not blend:
-            sys.exit("node order: %s (not BLEND) comes after a BLEND mesh" % n.name)
-        seen_blend = seen_blend or blend
-        stack.extend(reversed(n.children))
 
 
 # ---------------------------------------------------------------------------
@@ -619,7 +576,6 @@ def write_glb(roots, mats, path):
         buf.append(0)
     doc = {
         "asset": {"version": "2.0", "generator": "moonlight-N3DS make_banner.py"},
-        "extensionsUsed": ["KHR_animation_pointer"],
         "scene": 0, "scenes": [{"nodes": scene_nodes}], "nodes": nodes,
         "meshes": meshes, "materials": materials, "accessors": accessors,
         "bufferViews": views, "buffers": [{"byteLength": len(buf)}],
@@ -628,6 +584,10 @@ def write_glb(roots, mats, path):
                       "wrapS": 33071, "wrapT": 33071}],
         "animations": [anim],
     }
+    # declaring the pointer extension alone makes pycgfx build a material
+    # animation, which the HOME Menu does not handle safely
+    if any(c["target"].get("path") == "pointer" for c in anim["channels"]):
+        doc["extensionsUsed"] = ["KHR_animation_pointer"]
     js = json.dumps(doc, separators=(",", ":")).encode()
     while len(js) % 4:
         js += b" "
