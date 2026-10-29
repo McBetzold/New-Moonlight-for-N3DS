@@ -36,3 +36,14 @@ pycgfx only warns above 512 KiB, but a 458 KB banner froze the whole 3DS as
 soon as the app was selected in the HOME Menu, while 220-230 KB banners
 worked. Keep `banner.cgfx` near 250 KB or less; textures (2 bytes per pixel)
 are most of it, so keep them small.
+
+## Status
+
+The Makefile currently uses the flat `3ds/res/banner.png`. The 3D banners
+from commit fb0064e on froze or crashed the HOME Menu (a data abort in the
+`menu` process) as soon as the app was selected, even at the size of the
+banners that worked (f2817e8 and 53862c7). Those two had a single turning
+node, a 6 second loop and no disc mesh; the failing ones added a textured
+disc, two nested turning nodes of nearly 180 degrees each, a 12 second
+loop, and in places an alpha-tested or blended wheel. Change one thing at
+a time from 53862c7 to find the cause.

@@ -70,8 +70,9 @@ ICON		:=	3ds/res/ic_moonlight.png
 
 # CIA
 BANNER_AUDIO	:=	3ds/res/banner.wav
-# 3D banner built by 3ds/banner/make_banner.py (banner.png is the old flat one)
-BANNER_IMAGE	:=	3ds/res/banner.cgfx
+# Flat banner for now: the 3D banner.cgfx (3ds/banner/make_banner.py) froze
+# or crashed the HOME Menu on the 3DS from fb0064e on; see 3ds/banner/README.md
+BANNER_IMAGE	:=	3ds/res/banner.png
 RSF_PATH		:=	3ds/res/app.rsf
 UNIQUE_ID		:=	0x3600
 PRODUCT_CODE	:=	CTR-P-MOONLIGHT
