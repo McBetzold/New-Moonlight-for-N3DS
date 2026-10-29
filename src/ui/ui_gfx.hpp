@@ -157,7 +157,7 @@ inline float desktop_screen_y(float cy, float size) {
 // Apollo's virtual display: a monitor in a rainbow frame with a plus
 void virtual_display(float cx, float cy, float size);
 // Steam's logo (disc of radius r, the piston cut out in `cut`, the colour
-// behind it) in a thin turning rainbow ring
+// behind it) in a thin rainbow ring whose colours flow around it
 void steam(float cx, float cy, float r, u32 cut);
 // A game: a silver controller with rainbow face buttons
 void game(float cx, float cy, float size);
