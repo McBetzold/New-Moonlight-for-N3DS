@@ -68,6 +68,8 @@ import logo_art  # noqa: E402
 LOOP_SECONDS = 12.0
 # how far each of the two nested wheel nodes turns per loop (they add up)
 SPIN_DEG_PER_NODE = 179.9
+# parts to leave out (for finding what the HOME Menu chokes on)
+OMIT = set()
 KEY_STEP = 0.25  # seconds between animation keys (fewer keys = smaller banner)
 
 CAM_POS = (0.0, 1.0, 44.786)
@@ -440,6 +442,19 @@ def build_scene():
     # pycgfx draws translucent meshes in node order: back to front
     blended.sort(key=lambda b: b[0])
     roots += [n for _, n in blended]
+    if OMIT:
+        prefixes = {"wheel": "WheelPosition", "halo": "Halo", "stars": "Sparkle",
+                    "badge": "Badge", "title": "Title", "backdrop": "Backdrop"}
+        drop = tuple(prefixes[o] for o in OMIT)
+        roots = [n for n in roots if not n.name.startswith(drop)]
+        used = set()
+        stack = list(roots)
+        while stack:
+            n = stack.pop()
+            if n.material is not None:
+                used.add(n.material.name)
+            stack.extend(n.children)
+        mats = {k: v for k, v in mats.items() if k in used}
     check_node_order(roots)
     return roots, mats
 
@@ -699,7 +714,11 @@ def main():
     ap.add_argument("--spin-deg", type=float, metavar="DEG",
                     help="turn of each of the two wheel nodes per loop "
                          "(default %g)" % SPIN_DEG_PER_NODE)
+    ap.add_argument("--omit", default="", metavar="PARTS",
+                    help="comma-separated parts to leave out: wheel, halo, "
+                         "stars, badge, title, backdrop")
     args = ap.parse_args()
+    OMIT.update(p for p in args.omit.split(",") if p)
     if args.loop:
         LOOP_SECONDS = args.loop
     if args.spin_deg is not None:
