@@ -66,6 +66,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import logo_art  # noqa: E402
 
 LOOP_SECONDS = 12.0
+# how far each of the two nested wheel nodes turns per loop (they add up)
+SPIN_DEG_PER_NODE = 179.9
 KEY_STEP = 0.25  # seconds between animation keys (fewer keys = smaller banner)
 
 CAM_POS = (0.0, 1.0, 44.786)
@@ -352,7 +354,7 @@ def build_scene():
     wheel_pos.anim["translation"] = lambda tm: (wx, wy, WHEEL_Z)
     spin_a = wheel_pos.add(Node("WheelSpinA"))
     spin_a.anim["rotation"] = lambda tm: quat_axis(
-        (0, 0, 1), -math.radians(179.9) * tm / LOOP_SECONDS)
+        (0, 0, 1), -math.radians(SPIN_DEG_PER_NODE) * tm / LOOP_SECONDS)
     spin_b = spin_a.add(Node("WheelSpinB", disc, wheel_mat))
     spin_b.anim["rotation"] = spin_a.anim["rotation"]
     roots.append(wheel_pos)
@@ -684,6 +686,7 @@ def render(roots, time, w=400, h=240):
 
 
 def main():
+    global LOOP_SECONDS, SPIN_DEG_PER_NODE
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", default=os.path.dirname(os.path.abspath(__file__)))
     ap.add_argument("--preview", action="store_true",
@@ -691,7 +694,16 @@ def main():
     ap.add_argument("--assets", metavar="DIR",
                     help="also write the app icon (ic_moonlight.png) and the "
                          "flat fallback banner (banner.png) to DIR")
+    ap.add_argument("--loop", type=float, metavar="SECONDS",
+                    help="loop length (default %g)" % LOOP_SECONDS)
+    ap.add_argument("--spin-deg", type=float, metavar="DEG",
+                    help="turn of each of the two wheel nodes per loop "
+                         "(default %g)" % SPIN_DEG_PER_NODE)
     args = ap.parse_args()
+    if args.loop:
+        LOOP_SECONDS = args.loop
+    if args.spin_deg is not None:
+        SPIN_DEG_PER_NODE = args.spin_deg
     roots, mats = build_scene()
     glb = os.path.join(args.out, "banner.glb")
     write_glb(roots, mats, glb)
