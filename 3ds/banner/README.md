@@ -25,7 +25,7 @@ font (Windows), and [pycgfx](https://github.com/skyfloogle/pycgfx) (commit
 
 ```sh
 python make_banner.py --preview --assets ../res   # banner.glb, preview, icon, flat banner
-python path/to/pycgfx/main.py banner.glb ../res/banner.cgfx
+python convert.py path/to/pycgfx banner.glb ../res/banner.cgfx  # pycgfx + billboard
 ```
 
 `--preview` renders four frames of the loop with a small software renderer
