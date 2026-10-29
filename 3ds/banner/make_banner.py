@@ -11,7 +11,7 @@ Scene (glTF units, camera from pycgfx's banner-camera.gltf: position
 (0, 1, 44.786), looking down -Z, 30 degree vertical FOV, 5:3, near 26.5,
 so nothing may come closer than z = 18):
   * a light backdrop far behind everything (z = -16)
-  * coloured sparkles that twinkle, from deep behind the screen (z = -12)
+  * 25 coloured sparkles that twinkle, from deep behind the screen (z = -12)
     to well in front of it (z = 15), kept out of the logo and title areas
   * the wheel (ring and spokes) spinning in place, out of the screen (z = 10)
   * the silver "new" and its dashes, fixed, just in front of it (z = 11)
@@ -32,6 +32,13 @@ Animation notes (pycgfx limitations):
     front by depth
   * the HOME Menu light shines straight into the screen and there is no
     ambient light: faces turned away from the viewer go dark
+
+BANNER BUDGET: keep banner.cgfx near 250 KB or less. A 458 KB banner (big
+textures: a 256x256 wheel plus two 256x128 images) froze the whole 3DS when
+the app was selected in the HOME Menu, although pycgfx only warns above
+512 KiB; 220-230 KB banners worked. Textures are RGBA4, 2 bytes per pixel,
+and dominate the size, so keep them small (the wheel is 128x128, the
+backdrop 128x64, the badge 256x64).
 """
 
 import argparse
@@ -49,7 +56,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import logo_art  # noqa: E402
 
 LOOP_SECONDS = 12.0
-KEY_STEP = 0.125  # seconds between animation keys
+KEY_STEP = 0.25  # seconds between animation keys (fewer keys = smaller banner)
 
 CAM_POS = (0.0, 1.0, 44.786)
 CAM_YFOV = 0.523599
@@ -141,14 +148,14 @@ def quantize_rgba4(im):
 
 def make_backdrop():
     """Light, slightly cool gradient with a soft glow behind the wheel."""
-    w, h = 256, 128
+    w, h = 128, 64  # a smooth gradient: low resolution is enough
     im = Image.new("RGB", (w, h))
     px = im.load()
     top, bottom = (255, 255, 255), (206, 216, 230)
     for y in range(h):
         t = (y / (h - 1)) ** 1.3
         for x in range(w):
-            dx, dy = (x - 66) / 80.0, (y - 62) / 56.0
+            dx, dy = (x - 0.26 * w) / (0.31 * w), (y - 0.48 * h) / (0.44 * h)
             glow = max(0.0, 1.0 - math.sqrt(dx * dx + dy * dy)) ** 2
             px[x, y] = tuple(int(min(255, top[i] + (bottom[i] - top[i]) * t
                                      + glow * 40)) for i in range(3))
@@ -316,7 +323,7 @@ def build_scene():
     # nodes so no angle passes 180 degrees
     k = world_per_pixel(WHEEL_Z)
     wx, wy = px_to_world(WHEEL_PX[0], WHEEL_PX[1], WHEEL_Z)
-    wheel_tex = logo_art.wheel(256)
+    wheel_tex = logo_art.wheel(128)  # small textures: see BANNER BUDGET
     wheel_mat = mat("Wheel", texture=quantize_rgba4(wheel_tex), roughness=1.0)
     disc = disc_mesh(WHEEL_R_PX * k)
     # logo_art draws the ring at 0.49 of the image: map the disc rim there
@@ -334,9 +341,9 @@ def build_scene():
     # sparkles in the logo colours, all twinkling, at every depth
     sparkle = make_sparkle()
     twinklers = []
-    for i in range(12):
-        color = SPARKLE_COLORS[i % 6]
-        phase = i / 12.0
+    for i in range(len(SPARKLE_COLORS)):
+        color = SPARKLE_COLORS[i]
+        phase = i / float(len(SPARKLE_COLORS))
         cycles = 2 + (i % 3)
 
         def anim(tm, phase=phase, cycles=cycles, color=color):
@@ -358,9 +365,9 @@ def build_scene():
     rnd = random.Random(5)
     placed = []
     # (count, depth range, apparent size in px)
-    for count, (z0, z1), (s0, s1) in [(12, (-12, -6), (8, 11)),
-                                      (8, (-4, 3), (10, 14)),
-                                      (12, (5, 15), (13, 19))]:
+    for count, (z0, z1), (s0, s1) in [(9, (-12, -6), (8, 11)),
+                                      (6, (-4, 3), (10, 14)),
+                                      (10, (5, 15), (13, 19))]:
         n = tries = 0
         while n < count and tries < 3000:
             tries += 1
@@ -385,9 +392,9 @@ def build_scene():
     kb = world_per_pixel(BADGE_Z)
     bw_px = 0.88 * img_px
     bx, by = px_to_world(WHEEL_PX[0], WHEEL_PX[1] - 0.03 * img_px, BADGE_Z)
-    badge = mat("Badge", texture=quantize_rgba4(logo_art.new_badge(256, 128)),
+    badge = mat("Badge", texture=quantize_rgba4(logo_art.new_badge(256, 64)),
                 blend=True)
-    blended.append((BADGE_Z, Node("Badge", quad_mesh(bw_px * kb, bw_px * kb / 2),
+    blended.append((BADGE_Z, Node("Badge", quad_mesh(bw_px * kb, bw_px * kb / 4),
                                   badge, t=(bx, by, BADGE_Z))))
 
     kt = world_per_pixel(TITLE_Z)

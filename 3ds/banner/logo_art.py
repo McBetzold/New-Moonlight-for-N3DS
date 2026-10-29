@@ -166,19 +166,23 @@ def new_badge(width, height, ss=4):
     W, H = width * ss, height * ss
     im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     text = metallic_text("new", int(H * 0.36), ss=2, outline_frac=0.06)
-    scale = (W * 0.62) / text.width    # "new" spans about 62% of the badge
+    # "new" spans about 62% of the badge, or less if the badge is too short
+    # (the banner uses a flatter badge texture to save memory)
+    scale = min((W * 0.62) / text.width, (H * 0.92) / text.height)
     text = text.resize((int(text.width * scale), int(text.height * scale)),
                        Image.LANCZOS)
     im.alpha_composite(text, ((W - text.width) // 2, (H - text.height) // 2))
     d = ImageDraw.Draw(im)
     cx, cy = W / 2, H / 2
-    length, thick = W * 0.065, W * 0.042
+    length, thick = min(W * 0.065, H * 0.22), min(W * 0.042, H * 0.13)
+    rx = W * 0.445
+    spread = min(rx * math.sin(math.radians(16)) * 0.9,
+                 H / 2 - thick * 0.5 - length * 0.15)
     for side, colors in ((-1, DASHES_LEFT), (1, DASHES_RIGHT)):
         for i, col in enumerate(colors):
             ang = math.radians((i - 1) * 16)          # -16, 0, +16 degrees
-            rx = W * 0.445
             x = cx + side * rx * math.cos(ang)
-            y = cy + rx * math.sin(ang) * 0.9
+            y = cy + (i - 1) * spread
             _dash(d, x, y, ang if side > 0 else -ang, length, thick, col)
     return im.resize((width, height), Image.LANCZOS)
 

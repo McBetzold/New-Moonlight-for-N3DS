@@ -31,5 +31,7 @@ python path/to/pycgfx/main.py banner.glb ../res/banner.cgfx
 that approximates the HOME Menu's lighting, which is enough to check the
 layout. The real banner must still be checked on a 3DS.
 
-pycgfx warns if the CGFX is over 512 KiB, the most the 3DS accepts; the
-current banner is about 460 KB, so add texture sparingly.
+pycgfx only warns above 512 KiB, but a 458 KB banner froze the whole 3DS as
+soon as the app was selected in the HOME Menu, while 220-230 KB banners
+worked. Keep `banner.cgfx` near 250 KB or less; textures (2 bytes per pixel)
+are most of it, so keep them small.
