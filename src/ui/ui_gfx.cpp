@@ -627,22 +627,29 @@ void rainbow_frame(float x, float y, float w, float h, float radius,
     }
 }
 
-void wheel(float cx, float cy, float r, float angle) {
+// A ring between radii inner and outer in the rainbow, turned by angle (the
+// colours stay fixed to the ring as it turns)
+static void rainbow_ring(float cx, float cy, float outer, float inner,
+                         float angle) {
     const float two_pi = 2.0f * (float)M_PI;
-    const int segments = r >= 20.0f ? 48 : 24;
-    const float inner = r * 0.80f;
-    // the ring, its colours fixed to the wheel as it turns
+    const int segments = outer >= 20.0f ? 48 : 24;
     for (int i = 0; i < segments; i++) {
         float t0 = (float)i / segments, t1 = (float)(i + 1) / segments;
         float a0 = angle + two_pi * t0, a1 = angle + two_pi * t1;
         u32 c0 = rainbow(t0), c1 = rainbow(t1);
-        float ox0 = cx + r * std::cos(a0), oy0 = cy + r * std::sin(a0);
-        float ox1 = cx + r * std::cos(a1), oy1 = cy + r * std::sin(a1);
+        float ox0 = cx + outer * std::cos(a0), oy0 = cy + outer * std::sin(a0);
+        float ox1 = cx + outer * std::cos(a1), oy1 = cy + outer * std::sin(a1);
         float ix0 = cx + inner * std::cos(a0), iy0 = cy + inner * std::sin(a0);
         float ix1 = cx + inner * std::cos(a1), iy1 = cy + inner * std::sin(a1);
         C2D_DrawTriangle(ox0, oy0, c0, ox1, oy1, c1, ix1, iy1, c1, 0.0f);
         C2D_DrawTriangle(ox0, oy0, c0, ix1, iy1, c1, ix0, iy0, c0, 0.0f);
     }
+}
+
+void wheel(float cx, float cy, float r, float angle) {
+    const float two_pi = 2.0f * (float)M_PI;
+    const float inner = r * 0.80f;
+    rainbow_ring(cx, cy, r, inner, angle);
     // eight spokes, silver at the hub and the ring's colour where they meet
     // it
     float thickness = std::max(1.5f, r * 0.11f);
@@ -765,6 +772,25 @@ void virtual_display(float cx, float cy, float size) {
     rainbow_frame(cx - w / 2, top, w, h, size * 0.08f, b);
     plus(cx, top + h / 2, h * 0.45f, b, color::silver);
     monitor_stand(cx, top, h, size, color::silver);
+}
+
+void steam(float cx, float cy, float size) {
+    float r = size * 0.42f;
+    // the turning rainbow ring of the logo around a silver disc
+    rainbow_ring(cx, cy, r * 1.14f, r * 1.02f,
+                 2.0f * (float)M_PI * cycle(20000));
+    circle(cx, cy, r, color::silver);
+    // the piston: a large and a small ring joined by a rod, and the rod's
+    // tail out to the disc's left edge, cut out in the sky's colour
+    u32 cut = mix(color::bg, color::sky_mid, 0.5f);
+    float bx = cx + r * 0.30f, by = cy - r * 0.24f;  // large ring
+    float sx = cx - r * 0.22f, sy = cy + r * 0.26f;  // small ring
+    line(cx - r * 0.92f, cy + r * 0.06f, sx, sy, r * 0.20f, cut);
+    line(sx, sy, bx, by, r * 0.24f, cut);
+    circle(bx, by, r * 0.34f, cut);
+    circle(bx, by, r * 0.20f, color::silver);
+    circle(sx, sy, r * 0.21f, cut);
+    circle(sx, sy, r * 0.11f, color::silver);
 }
 
 void mouse(float cx, float cy, float size) {

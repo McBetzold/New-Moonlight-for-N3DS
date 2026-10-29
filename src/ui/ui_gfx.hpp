@@ -156,6 +156,8 @@ inline float desktop_screen_y(float cy, float size) {
 }
 // Apollo's virtual display: a monitor in a rainbow frame with a plus
 void virtual_display(float cx, float cy, float size);
+// Steam: its piston logo on a silver disc in a turning rainbow ring
+void steam(float cx, float cy, float size);
 // Apollo's Remote Input: a silver mouse with a rainbow scroll wheel
 void mouse(float cx, float cy, float size);
 void gear(float cx, float cy, float r, u32 color, u32 bg);
