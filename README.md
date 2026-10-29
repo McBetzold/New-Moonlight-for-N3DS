@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/new-moonlight-banner.jpg" alt="New Moonlight for N3DS" width="100%">
+</p>
+
 # New Moonlight for N3DS
 
 New Moonlight for N3DS is McBetzold's fork of [Moonlight for the *New* Nintendo 3DS](https://github.com/zoeyjodon/moonlight-N3DS) by zoeyjodon. It is an open source client for [Sunshine](https://github.com/LizardByte/Sunshine), [Apollo](https://github.com/ClassicOldSong/Apollo) and NVIDIA GameStream, originally forked from [Moonlight Embedded](https://github.com/moonlight-stream/moonlight-embedded), that streams the games and apps on your PC to the *New* Nintendo 3DS.
