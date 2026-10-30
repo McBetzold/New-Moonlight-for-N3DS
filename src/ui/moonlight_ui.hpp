@@ -111,6 +111,9 @@ struct PendingApps {
 
 struct ArtResult {
     std::vector<u8> tiled;
+    boxart::Default kind = boxart::Default::None;
+    boxart::Source source;
+    bool from_cache = false;
     bool ok = false;
 };
 
@@ -119,6 +122,14 @@ struct AppEntry {
     std::string name;
     std::string uuid;        // Apollo only, "" otherwise
     bool input_only = false; // Apollo's "Remote Input" pseudo-app (no video)
+    // The host sent its own default picture (Desktop, Steam, ...): the
+    // launcher draws art in its own look instead. Custom art is shown as is.
+    boxart::Default default_art = boxart::Default::None;
+    // Art from the SD cache is checked against the host once per visit to
+    // the app list, so a picture changed on the host shows up
+    bool revalidated = false;
+    std::shared_ptr<Worker::Job> recheck_job;
+    std::shared_ptr<ArtResult> recheck_result;
     std::string tile_name;   // ellipsized for the grid tile
     enum class ArtState { Pending, Loading, Ready, Missing };
     ArtState art_state = ArtState::Pending;
@@ -272,6 +283,7 @@ class MoonlightUi {
     void apply_apps(const std::shared_ptr<HostEntry> &host,
                     const AppsResult &result);
     void queue_boxart(AppEntry &app);
+    void recheck_boxart(AppEntry &app, const boxart::Source &cached);
     void free_boxart();
     void requeue_boxart();
     void leave_apps();
