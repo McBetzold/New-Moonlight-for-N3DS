@@ -29,15 +29,62 @@
 namespace boxart {
 
 static const char *CACHE_ROOT = MOONLIGHT_3DS_PATH "/boxart";
-// Bumped whenever the tiled layout changes so stale SD caches are redone.
-static const u32 CACHE_MAGIC = 0x33415842; // "BXA3"
+// Bumped whenever the cache format changes so stale SD caches are redone
+// ("BXA5": the header records the picture's fingerprint and which of the
+// hosts' default pictures it was, box.png included).
+static const u32 CACHE_MAGIC = 0x35415842; // "BXA5"
 
 struct CacheHeader {
     u32 magic;
     u32 tex_w;
     u32 tex_h;
+    u32 kind; // Default
+    u32 src_fnv_lo;
+    u32 src_fnv_hi;
+    u32 src_size;
     u32 reserved;
 };
+
+// FNV-1a fingerprints of the default pictures, from Sunshine's and Apollo's
+// src_assets/common/assets (every version in their history)
+struct KnownDefault {
+    u64 fnv;
+    u32 size;
+    Default kind;
+};
+static const KnownDefault KNOWN_DEFAULTS[] = {
+    {0xc733836ab194c5a9ULL, 8231, Default::Desktop},   // desktop.png
+    {0xde8dc9d3f6633eedULL, 8737, Default::Desktop},   // desktop-alt.png
+    {0x26ba5ce4dea6340cULL, 31433, Default::Desktop},  // older desktop.png
+    {0x6477d911cfe0ce4dULL, 32211, Default::Desktop},  // older desktop-alt
+    {0xb7aac8da6ba22ec1ULL, 24833, Default::Steam},    // steam.png
+    {0xe8a06a2099213d99ULL, 25012, Default::Steam},    // older steam.png
+    {0x964e8fc046b60986ULL, 51024, Default::Steam},    // older steam.png
+    {0xc844c1890e7e1af2ULL, 98678, Default::VirtualDisplay}, // Apollo
+    {0x598071ab2d7e2dd9ULL, 101584, Default::RemoteInput},   // Apollo
+    {0x30caf0963460f93cULL, 101768, Default::RemoteInput},   // older Apollo
+    {0x2259a68fdd069d29ULL, 680, Default::Generic},          // box.png
+    {0x392cdbc49843f29cULL, 998, Default::Generic},          // older box.png
+};
+
+Source fingerprint(const u8 *data, size_t size) {
+    Source s;
+    s.fnv = 0xcbf29ce484222325ULL;
+    for (size_t i = 0; i < size; i++) {
+        s.fnv = (s.fnv ^ data[i]) * 0x100000001b3ULL;
+    }
+    s.size = (u32)size;
+    return s;
+}
+
+Default identify_default(const Source &source) {
+    for (const auto &k : KNOWN_DEFAULTS) {
+        if (k.size == source.size && k.fnv == source.fnv) {
+            return k.kind;
+        }
+    }
+    return Default::None;
+}
 
 void ensure_cache_dir(const std::string &host_key) {
     mkdir(MOONLIGHT_3DS_PATH, 0777);
@@ -51,7 +98,8 @@ std::string cache_path(const std::string &host_key, int app_id) {
            std::to_string(app_id) + ".tex";
 }
 
-bool load_cached(const std::string &path, std::vector<u8> &tiled) {
+bool load_cached(const std::string &path, std::vector<u8> &tiled,
+                 Default &kind, Source &source) {
     FILE *f = fopen(path.c_str(), "rb");
     if (!f) {
         return false;
@@ -59,8 +107,12 @@ bool load_cached(const std::string &path, std::vector<u8> &tiled) {
     CacheHeader header;
     bool ok = fread(&header, sizeof(header), 1, f) == 1 &&
               header.magic == CACHE_MAGIC && header.tex_w == TEX_W &&
-              header.tex_h == TEX_H;
+              header.tex_h == TEX_H &&
+              header.kind <= (u32)Default::Generic;
     if (ok) {
+        kind = (Default)header.kind;
+        source.fnv = ((u64)header.src_fnv_hi << 32) | header.src_fnv_lo;
+        source.size = header.src_size;
         tiled.resize(TILED_BYTES);
         ok = fread(tiled.data(), 1, TILED_BYTES, f) == TILED_BYTES;
     }
@@ -71,7 +123,8 @@ bool load_cached(const std::string &path, std::vector<u8> &tiled) {
     return ok;
 }
 
-void save_cache(const std::string &path, const std::vector<u8> &tiled) {
+void save_cache(const std::string &path, const std::vector<u8> &tiled,
+                Default kind, const Source &source) {
     if (tiled.size() != TILED_BYTES) {
         return;
     }
@@ -79,7 +132,14 @@ void save_cache(const std::string &path, const std::vector<u8> &tiled) {
     if (!f) {
         return;
     }
-    CacheHeader header{CACHE_MAGIC, TEX_W, TEX_H, 0};
+    CacheHeader header{CACHE_MAGIC,
+                       TEX_W,
+                       TEX_H,
+                       (u32)kind,
+                       (u32)(source.fnv & 0xFFFFFFFFu),
+                       (u32)(source.fnv >> 32),
+                       source.size,
+                       0};
     fwrite(&header, sizeof(header), 1, f);
     fwrite(tiled.data(), 1, TILED_BYTES, f);
     fclose(f);

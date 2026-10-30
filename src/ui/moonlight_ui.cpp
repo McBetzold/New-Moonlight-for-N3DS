@@ -46,6 +46,74 @@ static const float ART_SCALE = 64.0f / 96.0f; // 64x85 tiles
 static const float HEADER_H = 30.0f;
 static const float HINTS_Y = 220.0f;
 
+// Steam's default picture in the launcher's look: its slate-blue gradient
+// (darkest at the top right) with stars, the logo and "STEAM" underneath,
+// laid out like the original
+static void steam_art(float x, float y, float w, float h) {
+    u32 tl = mix(rgba(0x37, 0x47, 0x4f), color::sky_mid, 0.2f);
+    u32 tr = mix(rgba(0x22, 0x2b, 0x33), color::sky_mid, 0.2f);
+    u32 bl = mix(rgba(0x56, 0x6c, 0x78), color::sky_mid, 0.2f);
+    u32 br = mix(rgba(0x3c, 0x4c, 0x56), color::sky_mid, 0.2f);
+    C2D_DrawRectangle(x, y, 0.0f, w, h, tl, tr, bl, br);
+    static const float stars[][2] = {{0.12f, 0.08f}, {0.86f, 0.12f},
+                                     {0.1f, 0.62f},  {0.88f, 0.56f},
+                                     {0.22f, 0.86f}, {0.74f, 0.92f}};
+    for (auto &st : stars) {
+        circle(x + w * st[0], y + h * st[1], std::max(0.7f, w * 0.009f),
+               with_alpha(color::silver, 0xa0));
+    }
+    float r = w * 0.2f, cx = x + w / 2.0f, cy = y + h * 0.33f;
+    // the colour behind the logo, for its cut-outs
+    u32 behind = mix(mix(tl, tr, 0.5f), mix(bl, br, 0.5f), 0.33f);
+    icon::steam(cx, cy, r, behind);
+    float scale = w * 0.0058f;
+    silver_text("STEAM", cx, y + h * 0.59f - line_height(scale) / 2.0f, scale,
+                C2D_AlignCenter);
+    rect_outline(x, y, w, h, 1, color::border);
+}
+
+// Replaces the host's default pictures (boxart::identify_default) with art
+// in the launcher's look: a small night sky with the entry's icon
+static void default_art(boxart::Default kind, float x, float y, float w,
+                        float h) {
+    if (kind == boxart::Default::Steam) {
+        steam_art(x, y, w, h);
+        return;
+    }
+    float mid = h * 0.6f;
+    u32 deep = mix(color::sky_mid, color::bg, 0.5f);
+    rect_gradient_v(x, y, w, mid, color::sky_mid, deep);
+    rect_gradient_v(x, y + mid, w, h - mid, deep, color::bg);
+    static const float stars[][2] = {{0.14f, 0.1f}, {0.8f, 0.16f},
+                                     {0.62f, 0.07f}, {0.24f, 0.8f},
+                                     {0.86f, 0.72f}, {0.08f, 0.5f},
+                                     {0.58f, 0.9f}};
+    for (auto &st : stars) {
+        circle(x + w * st[0], y + h * st[1], std::max(0.7f, w * 0.009f),
+               with_alpha(color::silver, 0x90));
+    }
+    rect_outline(x, y, w, h, 1, color::border);
+    float cx = x + w / 2.0f, cy = y + h * 0.5f, size = w * 0.62f;
+    switch (kind) {
+    case boxart::Default::Desktop:
+        icon::desktop(cx, cy, size, color::silver);
+        break;
+    case boxart::Default::Generic:
+        icon::game(cx, cy, size);
+        break;
+    case boxart::Default::Steam:
+        break;
+    case boxart::Default::VirtualDisplay:
+        icon::virtual_display(cx, cy, size);
+        break;
+    case boxart::Default::RemoteInput:
+        icon::mouse(cx, cy, size * 0.9f);
+        break;
+    case boxart::Default::None:
+        break;
+    }
+}
+
 static std::string gs_status_text(int status) {
     const char *err = gs_error ? gs_error : "";
     switch (status) {
@@ -218,13 +286,45 @@ void MoonlightUi::pump() {
             if (app.art_state == AppEntry::ArtState::Loading && app.job &&
                 app.job->is_done()) {
                 if (app.art_result && app.art_result->ok &&
-                    boxart::texture_upload(app.art, app.art_result->tiled)) {
+                    app.art_result->kind != boxart::Default::None) {
+                    // the host's default picture: draw the themed art
+                    app.default_art = app.art_result->kind;
+                    app.art_state = AppEntry::ArtState::Ready;
+                } else if (app.art_result && app.art_result->ok &&
+                           boxart::texture_upload(app.art,
+                                                  app.art_result->tiled)) {
+                    app.default_art = boxart::Default::None;
                     app.art_state = AppEntry::ArtState::Ready;
                 } else {
                     app.art_state = AppEntry::ArtState::Missing;
                 }
+                bool recheck = app.art_result && app.art_result->from_cache &&
+                               !app.revalidated;
+                boxart::Source cached =
+                    app.art_result ? app.art_result->source : boxart::Source();
                 app.job = nullptr;
                 app.art_result = nullptr;
+                if (recheck) {
+                    app.revalidated = true;
+                    recheck_boxart(app, cached);
+                }
+            }
+            // the host's picture changed since it was cached
+            if (app.recheck_job && app.recheck_job->is_done()) {
+                auto changed = app.recheck_result;
+                app.recheck_job = nullptr;
+                app.recheck_result = nullptr;
+                if (changed && changed->ok) {
+                    if (changed->kind != boxart::Default::None) {
+                        boxart::texture_free(app.art);
+                        app.default_art = changed->kind;
+                        app.art_state = AppEntry::ArtState::Ready;
+                    } else if (boxart::texture_upload(app.art,
+                                                      changed->tiled)) {
+                        app.default_art = boxart::Default::None;
+                        app.art_state = AppEntry::ArtState::Ready;
+                    }
+                }
             }
         }
     }
@@ -237,6 +337,7 @@ void MoonlightUi::render(const Modal *modal) {
     frame_begin();
 
     scene(Screen::Top, color::bg);
+    sky(Screen::Top);
     draw_top();
     if (modal) {
         draw_modal_top(*modal);
@@ -244,6 +345,7 @@ void MoonlightUi::render(const Modal *modal) {
     draw_toast();
 
     scene(Screen::Bottom, color::bg);
+    sky(Screen::Bottom);
     draw_bottom();
     if (modal) {
         draw_modal_bottom(*modal);
@@ -283,13 +385,19 @@ void MoonlightUi::draw_bottom() {
 void MoonlightUi::draw_header(const std::string &title,
                               const std::string &subtitle, bool logo) {
     rect(0, 0, TOP_W, HEADER_H, color::header);
-    rect(0, HEADER_H, TOP_W, 1, color::border);
+    rainbow_bar(0, HEADER_H, TOP_W, 2);
     float x = 12.0f;
     if (logo) {
-        icon::moon(x + 9, HEADER_H / 2, 9, color::accent, color::header);
-        x += 26.0f;
+        logo_wheel(x + 10, HEADER_H / 2, 11);
+        x += 28.0f;
     }
-    text(title, x, 5.0f, 0.6f, color::text);
+    // centred between the top of the screen and the rainbow underneath
+    float ty = (HEADER_H - line_height(0.6f)) / 2.0f;
+    if (logo) {
+        logo_text(title, x - 2.0f, ty, 0.6f);
+    } else {
+        silver_text(title, x, ty, 0.6f);
+    }
     if (!subtitle.empty()) {
         text(subtitle, TOP_W - 12.0f, 9.0f, 0.42f, color::text_dim,
              C2D_AlignRight);
@@ -308,7 +416,7 @@ void MoonlightUi::draw_hints(
 
 void MoonlightUi::draw_toolbar(const std::vector<ToolButton> &buttons) {
     rect(0, 0, BOT_W, TOOLBAR_H, color::header);
-    rect(0, TOOLBAR_H - 1, BOT_W, 1, color::border);
+    rainbow_bar(0, TOOLBAR_H - 2, BOT_W, 2);
     if (buttons.empty()) {
         return;
     }
@@ -319,7 +427,7 @@ void MoonlightUi::draw_toolbar(const std::vector<ToolButton> &buttons) {
         u32 c = b.enabled ? color::text : color::text_faint;
         bool pressed = b.enabled && in_.touching_in(x, 0, bw, TOOLBAR_H);
         if (pressed) {
-            rect(x, 0, bw, TOOLBAR_H - 1, color::card_hi);
+            rect(x, 0, bw, TOOLBAR_H - 2, color::card_hi);
         }
         if (i > 0) {
             rect(x, 6, 1, TOOLBAR_H - 12, color::border);
@@ -375,7 +483,8 @@ void MoonlightUi::draw_toast() {
     float h = line_height(0.45f) + 10.0f;
     float x = (TOP_W - w) / 2.0f;
     float y = HINTS_Y - h - 10.0f;
-    rrect(x, y, w, h, 6, color::accent_dim);
+    rrect(x, y, w, h, h / 2.0f, color::surface);
+    rainbow_frame(x, y, w, h, h / 2.0f, 2.0f);
     text(toast_text_, TOP_W / 2.0f, y + 5.0f, 0.45f, color::text,
          C2D_AlignCenter);
 }
@@ -389,7 +498,8 @@ void MoonlightUi::modal_button_rect(const Modal &m, int index, float &x,
         w = (BOT_W - 40.0f - (n - 1) * gap) / (float)n;
         h = 44.0f;
         x = 20.0f + index * (w + gap);
-        y = m.busy ? 170.0f : 104.0f;
+        // below the spinner and its text when busy (draw_modal_bottom)
+        y = m.busy ? 186.0f : 104.0f;
     } else {
         // Stack vertically and shrink the buttons so the whole list always
         // fits on the 240px screen (six items overflowed at a fixed 36px).
@@ -410,10 +520,9 @@ void MoonlightUi::draw_modal_top(const Modal &m) {
     const float x = 28.0f, w = TOP_W - 56.0f;
     float y = 30.0f, h = 180.0f;
     rrect(x, y, w, h, 8, color::surface);
-    rect(x + 8, y, w - 16, 3, color::accent);
+    rainbow_bar(x + 8, y, w - 16, 3);
     float cy = y + 12.0f;
-    text(ellipsize(m.title, 0.55f, w - 32.0f), x + 16.0f, cy, 0.55f,
-         color::accent_text);
+    silver_text(ellipsize(m.title, 0.55f, w - 32.0f), x + 16.0f, cy, 0.55f);
     cy += line_height(0.55f) + 6.0f;
     if (!m.message.empty()) {
         auto lines = wrap(m.message, 0.42f, w - 32.0f);
@@ -424,26 +533,26 @@ void MoonlightUi::draw_modal_top(const Modal &m) {
     }
     if (!m.big_text.empty()) {
         float scale = 1.3f;
-        float bw = text_width(m.big_text, scale) + 40.0f;
-        float bh = line_height(scale) + 8.0f;
+        float tw = logo_text_width(m.big_text, scale);
+        float bw = tw + 32.0f;
+        float bh = line_height(scale) + 12.0f;
         float by = std::min(cy, y + h - bh - 12.0f);
         rrect((TOP_W - bw) / 2.0f, by, bw, bh, 8, color::card);
-        text(m.big_text, TOP_W / 2.0f, by + 4.0f, scale, color::text,
-             C2D_AlignCenter);
+        logo_text(m.big_text, (TOP_W - tw) / 2.0f, by + 4.0f, scale);
     }
 }
 
 void MoonlightUi::draw_modal_bottom(const Modal &m) {
     rect(0, 0, BOT_W, BOT_H, color::overlay);
     if (m.busy) {
-        icon::spinner(BOT_W / 2.0f, 84.0f, 18.0f, color::accent, now_);
+        icon::spinner(BOT_W / 2.0f, BOT_H / 2.0f, 18.0f, now_);
         if (!m.busy_text.empty()) {
             auto lines = wrap(m.busy_text, 0.42f, BOT_W - 48.0f);
             if (lines.size() > 2) {
                 lines.resize(2);
             }
-            text_block(lines, BOT_W / 2.0f, 116.0f, 0.42f, color::text_dim,
-                       C2D_AlignCenter);
+            text_block(lines, BOT_W / 2.0f, BOT_H / 2.0f + 30.0f, 0.42f,
+                       color::text_dim, C2D_AlignCenter);
         }
     }
     for (size_t i = 0; i < m.buttons.size(); i++) {
@@ -460,10 +569,10 @@ void MoonlightUi::draw_modal_bottom(const Modal &m) {
         if (pressed) {
             fill = mix(fill, color::white, 0.2f);
         }
-        if (sel) {
-            rrect(x - 2, y - 2, w + 4, h + 4, 8, color::accent_text);
-        }
         rrect(x, y, w, h, 6, fill);
+        if (sel) {
+            rainbow_frame(x - 3, y - 3, w + 6, h + 6, 9, 2.5f);
+        }
 
         std::string subtitle =
             i < m.subtitles.size() ? m.subtitles[i] : std::string();
@@ -771,14 +880,23 @@ void MoonlightUi::pcs_draw_top() {
     draw_header("New Moonlight", "Computers", true);
 
     if (hosts_.empty()) {
-        text("No PCs added yet", TOP_W / 2.0f, 76.0f, 0.6f, color::text,
+        // the logo, as on the HOME Menu banner: "new" on the turning wheel
+        // beside the title with its red 3
+        const float wx = 100.0f, wy = 86.0f;
+        logo_wheel(wx, wy, 44.0f);
+        silver_text("new", wx, wy - line_height(0.62f) / 2.0f, 0.62f,
+                    C2D_AlignCenter);
+        logo_text("Moonlight", 158.0f, 50.0f, 1.05f);
+        logo_text("for N3DS", 158.0f, 50.0f + line_height(1.05f) - 2.0f,
+                  1.05f, 5);
+        text("No PCs added yet", TOP_W / 2.0f, 140.0f, 0.5f, color::text,
              C2D_AlignCenter);
         auto lines =
             wrap("Tap  Add PC  on the bottom screen to search the local "
                  "network for PCs running Apollo, Sunshine or GeForce "
                  "Experience, or to enter a PC's IP address.",
-                 0.42f, TOP_W - 80.0f);
-        text_block(lines, TOP_W / 2.0f, 104.0f, 0.42f, color::text_dim,
+                 0.4f, TOP_W - 80.0f);
+        text_block(lines, TOP_W / 2.0f, 160.0f, 0.4f, color::text_dim,
                    C2D_AlignCenter);
         draw_hints({{"A", "Add PC"}, {"START", "Settings"}, {"B", "Exit"}});
         return;
@@ -786,24 +904,23 @@ void MoonlightUi::pcs_draw_top() {
 
     const HostEntry &h = *hosts_[sel_pc_];
     const float cx = 20.0f, cy = 42.0f, cw = TOP_W - 40.0f, ch = 168.0f;
-    rrect(cx, cy, cw, ch, 8, color::surface);
+    panel(cx, cy, cw, ch, 8);
 
     // Big icon with status badge
     float ix = cx + 58.0f, iy = cy + 66.0f;
-    icon::desktop(ix, iy, 72, h.online || !h.status_known ? color::text
-                                                           : color::text_faint);
+    bool lit = h.online || !h.status_known;
+    icon::desktop(ix, iy, 72, lit ? color::silver : color::text_faint, lit);
     if (h.probing) {
-        icon::spinner(ix, iy - 6, 14, color::accent, now_);
+        icon::spinner(ix, icon::desktop_screen_y(iy, 72), 12, now_);
     } else if (h.status_known && !h.online) {
         icon::warning(ix + 26, iy + 14, 30, color::warn, color::black);
     } else if (h.status_known && !h.paired) {
-        icon::lock(ix + 26, iy + 14, 30, color::text_dim, color::surface);
+        icon::lock(ix + 26, iy + 14, 30, color::text_dim, color::glass);
     }
 
     float tx = cx + 120.0f;
     float ty = cy + 16.0f;
-    text(ellipsize(h.display_name(), 0.62f, cw - 136.0f), tx, ty, 0.62f,
-         color::text);
+    silver_text(ellipsize(h.display_name(), 0.62f, cw - 136.0f), tx, ty, 0.62f);
     ty += line_height(0.62f) + 2.0f;
     text(h.address_text(), tx, ty, 0.42f, color::text_dim);
     ty += line_height(0.42f) + 8.0f;
@@ -871,18 +988,18 @@ void MoonlightUi::pcs_draw_bottom() {
         }
         const HostEntry &h = *hosts_[i];
         bool sel = (int)i == sel_pc_;
-        if (sel) {
-            rrect(x - 3, y - 3, PC_W + 6, PC_H + 6, 9, color::accent);
-        }
         u32 card = sel ? color::card_hi : color::card;
         rrect(x, y, PC_W, PC_H, 7, card);
+        if (sel) {
+            rainbow_frame(x - 3, y - 3, PC_W + 6, PC_H + 6, 10, 2.5f);
+        }
 
         float icx = x + PC_W / 2.0f, icy = y + 32.0f;
-        icon::desktop(icx, icy, 38, h.online || !h.status_known
-                                        ? color::text
-                                        : color::text_faint);
+        bool lit = h.online || !h.status_known;
+        icon::desktop(icx, icy, 38, lit ? color::silver : color::text_faint,
+                      lit);
         if (h.probing) {
-            icon::spinner(icx, icy - 3, 8, color::accent, now_);
+            icon::spinner(icx, icon::desktop_screen_y(icy, 38), 6.5f, now_);
         } else if (h.status_known && !h.online) {
             icon::warning(icx + 15, icy + 8, 17, color::warn, color::black);
         } else if (h.status_known && !h.paired) {
@@ -899,7 +1016,7 @@ void MoonlightUi::pcs_draw_bottom() {
     }
 
     if (hosts_.empty()) {
-        icon::desktop(BOT_W / 2.0f, 110.0f, 56, color::card_hi);
+        icon::desktop(BOT_W / 2.0f, 110.0f, 56, color::card_hi, false);
         text("Tap  Add PC  to get started", BOT_W / 2.0f, 150.0f, 0.42f,
              color::text_dim, C2D_AlignCenter);
     }
@@ -1869,19 +1986,21 @@ void MoonlightUi::apps_draw_top() {
     bool running = cur_host_ && cur_host_->current_game == app.id;
 
     const float cx = 20.0f, cy = 42.0f, cw = TOP_W - 40.0f, ch = 168.0f;
-    rrect(cx, cy, cw, ch, 8, color::surface);
+    panel(cx, cy, cw, ch, 8);
 
     // Box art at native 96x128
     float ax = cx + 18.0f, ay = cy + 20.0f;
     rrect(ax - 3, ay - 3, boxart::IMG_W + 6, boxart::IMG_H + 6, 5,
           running ? color::ok : color::card_hi);
-    if (app.art_state == AppEntry::ArtState::Ready) {
+    if (app.default_art != boxart::Default::None) {
+        default_art(app.default_art, ax, ay, boxart::IMG_W, boxart::IMG_H);
+    } else if (app.art_state == AppEntry::ArtState::Ready) {
         boxart::draw(app.art, ax, ay, 1.0f);
     } else {
         rect(ax, ay, boxart::IMG_W, boxart::IMG_H, color::card);
         if (app.art_state == AppEntry::ArtState::Loading) {
             icon::spinner(ax + boxart::IMG_W / 2.0f, ay + boxart::IMG_H / 2.0f,
-                          12, color::accent, now_);
+                          12, now_);
         } else {
             icon::gamepad(ax + boxart::IMG_W / 2.0f, ay + boxart::IMG_H / 2.0f,
                           56, color::card_hi, color::text_faint);
@@ -1956,23 +2075,25 @@ void MoonlightUi::apps_draw_bottom() {
         float art_h = boxart::IMG_H * ART_SCALE;
         float ax = x + (APP_W - art_w) / 2.0f;
         float ay = y + 3.0f;
-        if (sel) {
-            rrect(ax - 3, ay - 3, art_w + 6, art_h + 6, 5, color::accent);
-        } else if (running) {
+        if (running && !sel) {
             rrect(ax - 2, ay - 2, art_w + 4, art_h + 4, 4, color::ok);
         }
-        if (app.art_state == AppEntry::ArtState::Ready) {
+        if (app.default_art != boxart::Default::None) {
+            default_art(app.default_art, ax, ay, art_w, art_h);
+        } else if (app.art_state == AppEntry::ArtState::Ready) {
             boxart::draw(app.art, ax, ay, ART_SCALE);
         } else {
             rect(ax, ay, art_w, art_h, sel ? color::card_hi : color::card);
             if (app.art_state == AppEntry::ArtState::Loading) {
-                icon::spinner(ax + art_w / 2.0f, ay + art_h / 2.0f, 8,
-                              color::accent, now_);
+                icon::spinner(ax + art_w / 2.0f, ay + art_h / 2.0f, 8, now_);
             } else {
                 icon::gamepad(ax + art_w / 2.0f, ay + art_h / 2.0f, 36,
                               sel ? color::card : color::card_hi,
                               color::text_faint);
             }
+        }
+        if (sel) {
+            rainbow_frame(ax - 4, ay - 4, art_w + 8, art_h + 8, 6, 2.5f);
         }
         if (running) {
             circle(ax + art_w - 8, ay + 8, 8, color::ok);
@@ -1984,7 +2105,9 @@ void MoonlightUi::apps_draw_bottom() {
 
     if (apps_.empty()) {
         if (pending_apps_) {
-            icon::spinner(BOT_W / 2.0f, 120.0f, 16, color::accent, now_);
+            icon::spinner(BOT_W / 2.0f, BOT_H / 2.0f, 18.0f, now_);
+            text("Loading apps", BOT_W / 2.0f, BOT_H / 2.0f + 30.0f, 0.42f,
+                 color::text_dim, C2D_AlignCenter);
         } else {
             text("No apps", BOT_W / 2.0f, 120.0f, 0.45f, color::text_dim,
                  C2D_AlignCenter);
@@ -2088,6 +2211,8 @@ void MoonlightUi::apply_apps(const std::shared_ptr<HostEntry> &host,
             if (old.id == app.id &&
                 old.art_state == AppEntry::ArtState::Ready) {
                 app.art = old.art;
+                app.default_art = old.default_art;
+                app.revalidated = old.revalidated;
                 app.art_state = AppEntry::ArtState::Ready;
                 old.art.valid = false; // ownership moved
                 break;
@@ -2121,8 +2246,10 @@ void MoonlightUi::queue_boxart(AppEntry &app) {
     app.job = Worker::instance().post(
         [host, result, key, id] {
             std::string path = boxart::cache_path(key, id);
-            if (boxart::load_cached(path, result->tiled)) {
+            if (boxart::load_cached(path, result->tiled, result->kind,
+                                    result->source)) {
                 result->ok = true;
+                result->from_cache = true;
                 return;
             }
             char *data = nullptr;
@@ -2131,11 +2258,51 @@ void MoonlightUi::queue_boxart(AppEntry &app) {
             int status = gs_download_boxart(&host->server, id, &data, &size);
             http_set_timeout_s(60);
             if (status == GS_OK && data != nullptr) {
+                result->source = boxart::fingerprint((const u8 *)data, size);
+                result->kind = boxart::identify_default(result->source);
                 if (boxart::decode_png((const u8 *)data, size,
                                        result->tiled)) {
                     result->ok = true;
                     boxart::ensure_cache_dir(key);
-                    boxart::save_cache(path, result->tiled);
+                    boxart::save_cache(path, result->tiled, result->kind,
+                                       result->source);
+                }
+            }
+            free(data);
+        },
+        true, true); // background, droppable
+}
+
+// Downloads the picture again and delivers it only if it differs from the
+// cached one (result->ok), updating the cache
+void MoonlightUi::recheck_boxart(AppEntry &app, const boxart::Source &cached) {
+    if (!cur_host_) {
+        return;
+    }
+    auto host = cur_host_;
+    auto result = std::make_shared<ArtResult>();
+    std::string key = host->cache_key();
+    int id = app.id;
+    app.recheck_result = result;
+    app.recheck_job = Worker::instance().post(
+        [host, result, key, id, cached] {
+            char *data = nullptr;
+            size_t size = 0;
+            http_set_timeout_s(20);
+            int status = gs_download_boxart(&host->server, id, &data, &size);
+            http_set_timeout_s(60);
+            if (status == GS_OK && data != nullptr) {
+                result->source = boxart::fingerprint((const u8 *)data, size);
+                if (!(result->source == cached)) {
+                    result->kind = boxart::identify_default(result->source);
+                    if (boxart::decode_png((const u8 *)data, size,
+                                           result->tiled)) {
+                        result->ok = true;
+                        boxart::ensure_cache_dir(key);
+                        boxart::save_cache(boxart::cache_path(key, id),
+                                           result->tiled, result->kind,
+                                           result->source);
+                    }
                 }
             }
             free(data);
