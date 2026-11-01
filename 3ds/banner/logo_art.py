@@ -282,7 +282,7 @@ def title_block(width, height, ss=2):
     return im.resize((width, height), Image.LANCZOS)
 
 
-# Isaac's wheel artwork (1024x1024): eight spokes and a rainbow ring on a
+# The wheel artwork (1024x1024): eight spokes and a rainbow ring on a
 # starry background. Measured: centre (512, 512), ring from radius 401 to
 # 443.5 (outlines included), spokes 43 px wide, meeting in a light hub.
 WHEEL_ART = os.path.join(os.path.dirname(os.path.abspath(__file__)),

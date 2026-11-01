@@ -14,6 +14,8 @@ While this app is operable on the original 3DS, the hardware decoder must be dis
 
 The launcher follows the Moonlight PC and Android apps: a list of your PCs, a grid of apps with box art, and a grouped settings page. The touch screen holds the grid and a toolbar; the top screen shows details for the highlighted item plus the button hints.
 
+Everything is drawn in the look of the app icon and HOME Menu banner: a night sky with twinkling stars, the rainbow wheel (which also serves as the loading spinner) and silver lettering. Sunshine's and Apollo's stock pictures for Desktop, Steam Big Picture, Virtual Display, Remote Input and apps without art are replaced with matching tiles; any picture you set on the host yourself is shown as it is.
+
 ### Adding and pairing a PC
 
 After modding your 3DS and installing the Moonlight CIA, open the Moonlight application from your home menu.
@@ -76,7 +78,7 @@ The default settings are recommended for \*New\* 3DS users. The PC list is store
 
 ### Apollo hosts
 
-[Apollo](https://github.com/ClassicOldSong/Apollo) is a Sunshine fork with a built-in virtual display and a few extras of its own. Moonlight for 3DS uses them when it sees an Apollo host; Sunshine and GeForce Experience hosts are unaffected.
+[Apollo](https://github.com/ClassicOldSong/Apollo) is a Sunshine fork with a built-in virtual display and a few extras of its own. New Moonlight uses them when it sees an Apollo host; Sunshine and GeForce Experience hosts are unaffected.
 
 - **Client name.** The 3DS pairs as `New 3DS` (or `3DS` on an original model) instead of moonlight-embedded's old placeholder `roth`, so it is easy to find in Apollo's client list, where per-client settings such as the display mode override and permissions live.
 - **Permissions.** Apollo gives every client after the first only *view streams* and *list apps*. The PC card and the app list say so, and the launcher explains what to enable, instead of failing with a bare "Permission denied". Grant permissions on the PIN tab of Apollo's web UI.
@@ -117,7 +119,9 @@ More information about installing and runnning Moonlight Embedded is available o
 
 ## Build
 
-I have included a Dockerfile which has all of the required build dependencies pre-installed. The easiest way to build moonlight.cia is by building and running the docker image.
+Every push is built by GitHub Actions (`.github/workflows/build-cia.yml`), which uploads `moonlight.cia`, `moonlight.3dsx`, `moonlight.elf` and a symbol list as the run's artifact, so you can test a change without building anything locally.
+
+To build it yourself, the repository includes a Dockerfile which has all of the required build dependencies pre-installed. The easiest way to build moonlight.cia is by building and running the docker image.
 If you are using VS Code as your editor, you can use the `Build Docker` and `Run Docker` tasks for this.
 If you are not using VS Code, you can build and run the docker image with the following terminal commands from the root of the repository:
 
@@ -137,7 +141,11 @@ make
 
 ## Install
 
-You can download the CIA file (moonlight.cia) from the [Releases](https://github.com/zoeyjodon/moonlight-N3DS/releases/latest) page, and install it using [FBI](https://github.com/Steveice10/FBI).
+Download the CIA file (moonlight.cia) from the [Releases](https://github.com/McBetzold/New-Moonlight-for-N3DS/releases) page and install it using [FBI](https://github.com/Steveice10/FBI): copy it to the SD card and open it in FBI's *SD* browser, or skip the SD card by choosing *Remote Install* > *Scan QR Code* in FBI and scanning a QR code of the CIA's download link.
+
+It uses the same title ID as the original Moonlight for N3DS, so it installs over it, and paired PCs and settings (kept in `sd:/3ds/moonlight`) carry over.
+
+If the HOME Menu keeps showing an old icon after an update, delete the title in FBI and install it again (see `3ds/banner/README.md` for clearing the icon cache).
 
 Please note that to run Moonlight on the 3DS, you will need to install custom firmware. You can find instructions for installing CFW [here](https://3ds.hacks.guide/).
 
@@ -147,6 +155,4 @@ Please note that to run Moonlight on the 3DS, you will need to install custom fi
 
 ## Contribute
 
-1. Fork us
-2. Write code
-3. Send Pull Requests
+Bug reports and ideas are welcome on the [issue tracker](https://github.com/McBetzold/New-Moonlight-for-N3DS/issues), and pull requests against `n3ds-main` likewise. See [CONTRIBUTING](.github/CONTRIBUTING.md).

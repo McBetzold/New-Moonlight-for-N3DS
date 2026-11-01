@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Create a report to help us improve
+about: Something does not work as it should
 title: ''
 labels: bug
 assignees: ''
@@ -13,26 +13,24 @@ A clear and concise description of what the bug is.
 **To Reproduce**
 Steps to reproduce the behavior:
 1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+2. Press '....'
+3. See error
 
 **Expected behavior**
-A clear and concise description of what you expected to happen.
+What you expected to happen instead.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**Screenshots / photos**
+If applicable, a photo of the screens (the debug view from the in-stream menu helps with stream problems).
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+**3DS**
+ - Model: [e.g. New 3DS XL, New 2DS XL, original 3DS]
+ - Release installed: [e.g. v3.1.0]
+ - Stream settings: [e.g. 800x480, 60 fps, 3D off]
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+**PC**
+ - Host: [Sunshine / Apollo / GeForce Experience] and version
+ - OS: [e.g. Windows 11]
+ - Network: [e.g. 3DS on 2.4 GHz Wi-Fi, PC on Ethernet]
 
 **Additional context**
 Add any other context about the problem here.

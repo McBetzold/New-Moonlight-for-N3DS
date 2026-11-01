@@ -156,12 +156,12 @@ NEBULAE = [  # (centre px, radius px, colour, opacity): wisps near the oval's ed
 # under the title and curving up as it fades into the distance
 RIBBON = [(-10, 150), (140, 214), (300, 214), (382, 168)]
 RIBBON_WIDTH = (13.0, 2.5)        # px at the start and at the end
-RIBBON_OPACITY = 0.0   # no rainbow road in Isaac's latest banner picture
+RIBBON_OPACITY = 0.0   # no rainbow road in the current banner picture
 RIBBON_COLOURS = [(226, 52, 52), (244, 140, 40), (246, 214, 52), (90, 190, 80),
                   (60, 182, 196), (60, 120, 220), (140, 80, 200)]
 DIM_STARS = 70
 TEXT_SHADE = ((292, 128), (100, 52), 0.20)   # darker oval behind the title
-BACKDROP_TEX = (128, 64)   # test 7's size (worked on the 3DS)
+BACKDROP_TEX = (128, 64)   # known to work on the 3DS
 
 
 def _bezier(p, t):
@@ -399,11 +399,10 @@ BADGE_Z = 11.0
 TITLE_Z = 9.0
 # the title card: left edge, centre height and how wide "Moonlight" is
 TITLE_LEFT, TITLE_CY, TITLE_WIDTH = 210, 128, 160
-# the stars of test 7 (8e2e0b6), the last banner that worked on the 3DS:
-# (z, x, y, size) in world units, back to front. Tests 8 and 9 placed 13
-# new stars inside the oval and both froze the HOME Menu, though nothing
-# else in their scenes differed from test 7's but positions and pictures.
-# These keep clear of the wheel and the title.
+# the stars, (z, x, y, size) in world units, back to front. This layout is
+# known to work on the 3DS; placing 13 other stars inside the oval froze the
+# HOME Menu although nothing else in the scene changed, so move or add stars
+# one at a time. These keep clear of the wheel and the title.
 STARS = [
     (-10.7071, -23.7065, -6.7387, 1.0692),
     (-9.1856, 6.8941, -7.0668, 1.005),
@@ -469,7 +468,7 @@ def build_scene():
     autorotate = root.add(Node("autorotate"))
     autorotate.anim["rotation"] = lambda tm: (0.0, 0.0, 0.0, 1.0)  # convert.py
 
-    # the wheel: Isaac's artwork (gaps between the spokes cut out with an
+    # the wheel: the logo artwork (gaps between the spokes cut out with an
     # alpha test), turning in place; convert.py writes the full-turn curve
     k = world_per_pixel(WHEEL_Z)
     wx, wy = px_to_world(WHEEL_PX[0], WHEEL_PX[1], WHEEL_Z)
@@ -498,7 +497,7 @@ def build_scene():
         tw.anim["scale"] = scale
 
     # "new" and its dashes, centred on the wheel; billboards at the origin.
-    # Textures as in test 7 (worked): backdrop 128x64, wheel 128x128, star
+    # Texture sizes known to work: backdrop 128x64, wheel 128x128, star
     # 32x32, badge 256x64, title 256x128 (all sizes different)
     img_px = WHEEL_R_PX / 0.49
     kb = world_per_pixel(BADGE_Z)
@@ -817,7 +816,7 @@ def main():
     write_glb(roots, mats, glb)
     print("wrote", glb)
     if args.assets:
-        # Isaac's icon as is, and his banner picture as the flat banner
+        # the icon artwork as is, and the banner picture as the flat banner
         icon = Image.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon_art.png")).convert("RGBA")
         flat = Image.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "banner_art.jpg")).convert("RGB")
         flat = flat.resize((256, 128), Image.LANCZOS)

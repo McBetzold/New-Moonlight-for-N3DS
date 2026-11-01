@@ -10,7 +10,7 @@ banners of retail games. bannertool packs it into the CIA when the Makefile's
   `wheel_art.jpg`), the silver "new" with its coloured dashes, and
   "Moonlight / for N3DS" with the red M and 3.
 - `make_banner.py` builds the 3D scene from those pieces (no 3D modelling
-  program needed): Isaac's wheel (`wheel_art.jpg`, with the gaps between the
+  program needed): the logo's wheel (`wheel_art.jpg`, with the gaps between the
   spokes made see-through) spinning in place with "new" fixed in front of it
   and the title beside it, all popping out of the screen, over a night sky
   with stars that twinkle at every depth. It also writes the 48x48 app icon
@@ -37,22 +37,25 @@ soon as the app was selected in the HOME Menu, while 220-230 KB banners
 worked. Keep `banner.cgfx` near 250 KB or less; textures (2 bytes per pixel)
 are most of it, so keep them small.
 
-## Status
+## How it works
 
-Works on the 3DS since test 10 (cb594a2): the banner stays still while
-Isaac's wheel turns in place, once per 20 s, and the stars twinkle in depth.
-It follows the structure of banners proven on the HOME Menu (GabeSud0's
+The banner stays still while the wheel turns in place, once per 20 s, and
+the stars twinkle in depth. It follows the structure of banners proven on the HOME Menu (GabeSud0's
 pokeplatinum-3ds, credited in `convert.py`): an `autorotate` bone that
 cancels the HOME Menu's own spin, screen-facing billboards for the flat
 cards, and no material animations.
 
-Learnt on the way (each cost a frozen or crashed HOME Menu):
+Limits found on real hardware (breaking any of them freezes or crashes the
+HOME Menu):
 
 - Keep `banner.cgfx` near 230 KB; a 458 KB one froze the 3DS.
 - No two textures of the same pixel size (`check_texture_sizes()`).
 - No large see-through cards in the middle of the scene.
-- Change one thing at a time. Tests 8 and 9 froze with 13 newly placed
-  stars and worked again with test 7's 14 (`STARS`); why is not known, so
-  move or add stars carefully.
-- The HOME Menu remembers a title's banner: delete the title in FBI before
-  installing a new banner.
+- Change one thing at a time. Placing 13 other stars froze the HOME Menu,
+  while the current 14 (`STARS`) work; why is not known, so move or add
+  stars carefully.
+- The HOME Menu caches a title's icon and banner: delete the title in FBI
+  before installing a new banner. If the old icon still shows, delete
+  `SD:/Nintendo 3DS/<ID0>/<ID1>/extdata/00000000/0000008f/00000000/00000005`
+  (the HOME Menu's icon cache, rebuilt at the next boot), for example in
+  GodMode9.

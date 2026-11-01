@@ -45,7 +45,7 @@ u32 with_alpha(u32 color, u8 alpha);
 u32 mix(u32 a, u32 b, float t);
 
 // The New Moonlight look, from the app icon and HOME Menu banner: a night
-// sky with twinkling stars, Isaac's rainbow wheel and silver letters with
+// sky with twinkling stars, the logo's rainbow wheel and silver letters with
 // rainbow edges (and a red 3)
 namespace color {
 constexpr u32 bg = rgba(0x07, 0x0b, 0x1f);      // the sky at the edges
@@ -129,7 +129,7 @@ void rainbow_bar(float x, float y, float w, float h);
 // travel slowly around it
 void rainbow_frame(float x, float y, float w, float h, float radius,
                    float thickness);
-// Isaac's wheel: rainbow ring and spokes around a silver hub, turned by
+// The logo's wheel: rainbow ring and spokes around a silver hub, turned by
 // `angle` (radians)
 void wheel(float cx, float cy, float r, float angle);
 // The wheel turning once per 20 s, like on the HOME Menu banner
