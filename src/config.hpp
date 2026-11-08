@@ -66,7 +66,7 @@ enum PAD_TARGET {
     PAD_DOWN,
     PAD_LEFT,
     PAD_RIGHT,
-    // View + Menu together: SwitchBridge's default "- and + together" turns
+    // View + Menu together: InputBridge's default "- and + together" turns
     // it into the Switch's Capture button (Apollo's virtual Xbox and DS4
     // pads have no Capture button of their own)
     PAD_CAPTURE,
