@@ -146,7 +146,7 @@ def quantize_rgba4(im):
 # The rainbow-road backdrop, drawn in top-screen pixels (at 2x) and then
 # mapped onto the backdrop quad. All its settings are here to tweak.
 SKY_EDGE, SKY_MID = (7, 11, 31), (27, 20, 70)          # #070B1F, #1B1446
-NEBULAE = [  # (centre px, radius px, colour, opacity): wisps near the oval's edge
+NEBULAE = [  # (center px, radius px, color, opacity): wisps near the oval's edge
     ((70, 70), 70, (231, 166, 215), 0.16),     # pink, upper left
     ((345, 70), 60, (184, 166, 232), 0.14),    # lavender, upper right
     ((60, 190), 60, (127, 211, 216), 0.13),    # teal, lower left
@@ -233,7 +233,7 @@ def draw_backdrop_screen(scale=2):
 
 def make_backdrop():
     """draw_backdrop_screen() mapped onto the backdrop quad (56 x 34 units at
-    z = -16, centred on (0, 1)): each texel shows the screen pixel in front
+    z = -16, centered on (0, 1)): each texel shows the screen pixel in front
     of it."""
     screen = draw_backdrop_screen(2)
     sp = screen.load()
@@ -269,7 +269,7 @@ def make_radial(size, color, max_alpha, power):
 
 
 def make_sparkle():
-    """White four-point sparkle; materials tint it with the logo colours."""
+    """White four-point sparkle; materials tint it with the logo colors."""
     size = 32
     im = make_radial(size, (255, 255, 255), 1.0, 2.2)
     px = im.load()
@@ -391,13 +391,13 @@ def px_to_world(px, py, z):
 # Larger z = closer to the viewer = further out of the screen in 3D. The
 # HOME Menu only draws between its bars, about y 40 to 212: keep inside.
 # The HOME Menu shows the banner inside an oval (measured from a photo:
-# centre (200, 128), half-axes about 195 x 102 px) and only between its bars
+# center (200, 128), half-axes about 195 x 102 px) and only between its bars
 # (y 40 to 212). Everything is laid out inside VISIBLE_OVAL with a margin.
 VISIBLE_OVAL = ((200, 128), (189, 96))   # 6 px inside the measured oval
 WHEEL_PX, WHEEL_R_PX, WHEEL_Z = (110, 128), 72, 10.0
 BADGE_Z = 11.0
 TITLE_Z = 9.0
-# the title card: left edge, centre height and how wide "Moonlight" is
+# the title card: left edge, center height and how wide "Moonlight" is
 TITLE_LEFT, TITLE_CY, TITLE_WIDTH = 210, 128, 160
 # the stars, (z, x, y, size) in world units, back to front. This layout is
 # known to work on the 3DS; placing 13 other stars inside the oval froze the
@@ -496,7 +496,7 @@ def build_scene():
             return (v, v, v)
         tw.anim["scale"] = scale
 
-    # "new" and its dashes, centred on the wheel; billboards at the origin.
+    # "new" and its dashes, centered on the wheel; billboards at the origin.
     # Texture sizes known to work: backdrop 128x64, wheel 128x128, star
     # 32x32, badge 256x64, title 256x128 (all sizes different)
     img_px = WHEEL_R_PX / 0.49

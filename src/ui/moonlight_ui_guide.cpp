@@ -74,7 +74,7 @@ static const GuidePage STEREO_GUIDE[] = {
      "Run the emulator full screen on Apollo's display."},
     {"Videos",
      "3D films and clips work when they are half side-by-side, often "
-     "labelled HSBS, Half-SBS or just SBS.\n"
+     "labeled HSBS, Half-SBS or just SBS.\n"
      "* Play them full screen on Apollo's display in any player, such as VLC "
      "or a web browser.\n"
      "* Full side-by-side files (Full-SBS, FSBS) are twice as wide and come "

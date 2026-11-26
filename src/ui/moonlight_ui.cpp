@@ -63,7 +63,7 @@ static void steam_art(float x, float y, float w, float h) {
                with_alpha(color::silver, 0xa0));
     }
     float r = w * 0.2f, cx = x + w / 2.0f, cy = y + h * 0.33f;
-    // the colour behind the logo, for its cut-outs
+    // the color behind the logo, for its cut-outs
     u32 behind = mix(mix(tl, tr, 0.5f), mix(bl, br, 0.5f), 0.33f);
     icon::steam(cx, cy, r, behind);
     float scale = w * 0.0058f;
@@ -391,7 +391,7 @@ void MoonlightUi::draw_header(const std::string &title,
         logo_wheel(x + 10, HEADER_H / 2, 11);
         x += 28.0f;
     }
-    // centred between the top of the screen and the rainbow underneath
+    // centered between the top of the screen and the rainbow underneath
     float ty = (HEADER_H - line_height(0.6f)) / 2.0f;
     if (logo) {
         logo_text(title, x - 2.0f, ty, 0.6f);
@@ -1538,7 +1538,7 @@ void MoonlightUi::pair_host(const std::shared_ptr<HostEntry> &host,
         if (cancelled->load()) {
             http_end_cancellable();
             http_set_timeout_s(60);
-            *error = "Cancelled";
+            *error = "Canceled";
             return;
         }
         *status = gs_pair(&host->server, &pin_copy[0],
@@ -1576,10 +1576,10 @@ void MoonlightUi::pair_host(const std::shared_ptr<HostEntry> &host,
             cancelled->store(true);
             http_cancel();
             Modal c;
-            c.title = "Cancelling pairing";
+            c.title = "Canceling pairing";
             wait_job(job, c, cancel_on_close);
             if (*status != GS_OK) {
-                toast("Pairing cancelled");
+                toast("Pairing canceled");
                 return;
             }
             // Pairing finished just before the cancel landed; keep it
@@ -1705,7 +1705,7 @@ void MoonlightUi::wake_host(const std::shared_ptr<HostEntry> &host) {
         return false;
     });
     if (r != -2) {
-        return; // cancelled
+        return; // canceled
     }
     if (host->online) {
         toast(host->display_name() + " is awake");

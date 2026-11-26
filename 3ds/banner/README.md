@@ -7,9 +7,9 @@ banners of retail games. bannertool packs it into the CIA when the Makefile's
 `3ds/res/banner.png` instead.
 
 - `logo_art.py` draws the logo in pieces: the wheel (cut out of
-  `wheel_art.jpg`), the silver "new" with its coloured dashes, and
+  `wheel_art.jpg`), the silver "new" with its colored dashes, and
   "Moonlight / for N3DS" with the red M and 3.
-- `make_banner.py` builds the 3D scene from those pieces (no 3D modelling
+- `make_banner.py` builds the 3D scene from those pieces (no 3D modeling
   program needed): the logo's wheel (`wheel_art.jpg`, with the gaps between the
   spokes made see-through) spinning in place with "new" fixed in front of it
   and the title beside it, all popping out of the screen, over a night sky

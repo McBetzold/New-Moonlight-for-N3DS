@@ -342,7 +342,7 @@ void rrect(float x, float y, float w, float h, float radius, u32 color) {
         return;
     }
     // Three rectangles and four quarter-circle fans that do not overlap, so
-    // translucent colours (panels over the sky) blend evenly
+    // translucent colors (panels over the sky) blend evenly
     rect(x + radius, y, w - 2 * radius, h, color);
     rect(x, y + radius, radius, h - 2 * radius, color);
     rect(x + w - radius, y + radius, radius, h - 2 * radius, color);
@@ -389,8 +389,8 @@ void rrect_outline(float x, float y, float w, float h, float radius,
     }
 }
 
-// An opaque colour that looks like `c` over the sky: icons cut their holes
-// with the colour behind them, and a translucent one would let the icon
+// An opaque color that looks like `c` over the sky: icons cut their holes
+// with the color behind them, and a translucent one would let the icon
 // show through
 static u32 solid(u32 c) {
     u8 a = (u8)(c >> 24);
@@ -436,7 +436,7 @@ float pill(float x, float y, const std::string &label, float scale, u32 fill,
 
 u64 frame_time() { return g_frame_time; }
 
-// The wheel's colours: pink, orange, yellow, green, teal, blue, violet
+// The wheel's colors: pink, orange, yellow, green, teal, blue, violet
 static const u32 RAINBOW[] = {rgba(0xf0, 0x6a, 0x7a), rgba(0xf6, 0xa4, 0x50),
                               rgba(0xf6, 0xe0, 0x5a), rgba(0x7c, 0xd6, 0x6c),
                               rgba(0x5c, 0xc8, 0xe0), rgba(0x6a, 0x8c, 0xf0),
@@ -568,7 +568,7 @@ void rainbow_bar(float x, float y, float w, float h) {
 
 void rainbow_frame(float x, float y, float w, float h, float radius,
                    float thickness) {
-    // the outline's centre line: a rounded rectangle inset by half the
+    // the outline's center line: a rounded rectangle inset by half the
     // thickness, walked clockwise from the top-left corner
     float half = thickness / 2.0f;
     x += half;
@@ -628,8 +628,8 @@ void rainbow_frame(float x, float y, float w, float h, float radius,
 }
 
 // A ring between radii inner and outer in the rainbow, turned by angle (the
-// colours stay fixed to the ring as it turns); colour_shift moves the
-// colours around a ring that stays still instead
+// colors stay fixed to the ring as it turns); colour_shift moves the
+// colors around a ring that stays still instead
 static void rainbow_ring(float cx, float cy, float outer, float inner,
                          float angle, float colour_shift = 0.0f) {
     const float two_pi = 2.0f * (float)M_PI;
@@ -651,7 +651,7 @@ void wheel(float cx, float cy, float r, float angle) {
     const float two_pi = 2.0f * (float)M_PI;
     const float inner = r * 0.80f;
     rainbow_ring(cx, cy, r, inner, angle);
-    // eight spokes, silver at the hub and the ring's colour where they meet
+    // eight spokes, silver at the hub and the ring's color where they meet
     // it
     float thickness = std::max(1.5f, r * 0.11f);
     for (int k = 0; k < 8; k++) {
@@ -777,11 +777,11 @@ void virtual_display(float cx, float cy, float size) {
 
 void steam(float cx, float cy, float r, u32 cut) {
     // a thin rainbow ring, the launcher's touch: it stays still while its
-    // colours flow around it
+    // colors flow around it
     rainbow_ring(cx, cy, r * 1.13f, r * 1.04f, 0.0f, cycle(20000));
     // Steam's logo, measured from its default picture: a white disc with
     // a piston (a large and a small ring joined by a rod, and a tail out
-    // to the disc's left edge) cut out in the background colour
+    // to the disc's left edge) cut out in the background color
     circle(cx, cy, r, color::text);
     float bx = cx + r * 0.385f, by = cy - r * 0.26f; // large ring
     float sx = cx - r * 0.31f, sy = cy + r * 0.39f;  // small ring

@@ -16,7 +16,7 @@ learnt on hardware by others, and are reimplemented here:
      the HOME Menu crashes (this is what crashed 62abada)
   3. BLEND materials are marked translucent (pycgfx leaves them opaque)
   From pokeplatinum-3ds:
-  4. materials are unlit (texture x material colour), whatever the HOME
+  4. materials are unlit (texture x material color), whatever the HOME
      Menu's light does
   5. the HOME Menu turns every 3D banner one full turn per 10 s about the
      vertical axis. "autorotate" turns the other way at the same rate (like

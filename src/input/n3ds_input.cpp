@@ -309,7 +309,7 @@ void N3dsInput::n3dsinput_handle_event() {
             if (mx || my)
                 LiSendMouseMoveEvent((short)mx, (short)my);
         }
-        // The host sees a centred right stick while the C-stick is the mouse
+        // The host sees a centered right stick while the C-stick is the mouse
         gamepad_state.rightStickX = 0;
         gamepad_state.rightStickY = 0;
     }

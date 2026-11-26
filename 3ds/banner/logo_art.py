@@ -1,8 +1,8 @@
 """Draws the "New Moonlight for N3DS" logo in pieces with Pillow.
 
-The logo: a wheel (a ring shading through the colours of the rainbow, with
+The logo: a wheel (a ring shading through the colors of the rainbow, with
 six spokes that fade to white towards the middle), a silver outlined "new"
-with three coloured dashes on each side, and the title "Moonlight / for N3DS"
+with three colored dashes on each side, and the title "Moonlight / for N3DS"
 in outlined silver with a red M and a red 3.
 
 The pieces are drawn separately so the banner can spin the wheel behind a
@@ -25,7 +25,7 @@ SILVER = [(0.0, (252, 252, 252)), (0.42, (214, 214, 218)),
           (0.56, (160, 160, 166)), (1.0, (228, 228, 232))]
 RED = [(0.0, (196, 44, 44)), (0.5, (150, 24, 24)), (1.0, (112, 14, 14))]
 
-# ring colours by angle, clockwise from the top (degrees)
+# ring colors by angle, clockwise from the top (degrees)
 RING_STOPS = [(0, (104, 150, 168)), (40, (110, 196, 210)), (75, (176, 222, 226)),
               (100, (240, 206, 84)), (125, (246, 168, 146)), (152, (226, 132, 198)),
               (180, (166, 200, 232)), (212, (80, 168, 222)), (240, (96, 192, 160)),
@@ -59,7 +59,7 @@ def ring_color(angle_deg):
 
 
 def _gradient_fill(mask, box, stops):
-    """An RGBA image the size of mask, coloured by a vertical gradient over
+    """An RGBA image the size of mask, colored by a vertical gradient over
     box (y0, y1) and transparent outside mask."""
     w, h = mask.size
     y0, y1 = box
@@ -139,7 +139,7 @@ def wheel(size, ss=4, interior=(255, 255, 255, 255)):
                 across = abs(-dx * sy + dy * sx)
                 if across > spoke_w / 2:
                     continue
-                t = along / (R - ring_w)            # 0 centre .. 1 ring
+                t = along / (R - ring_w)            # 0 center .. 1 ring
                 fade = max(0.0, min(1.0, (t - 0.28) / 0.6)) ** 1.2
                 base = ring_color(deg)
                 lit = tuple(int(255 + (base[i] - 255) * fade) for i in range(3))
@@ -187,7 +187,7 @@ def new_badge(width, height, ss=4):
     return im.resize((width, height), Image.LANCZOS)
 
 
-# rainbow outline colours, red through magenta, one per letter in turn
+# rainbow outline colors, red through magenta, one per letter in turn
 RAINBOW = [(222, 62, 52), (238, 128, 40), (236, 192, 40), (140, 196, 60),
            (60, 178, 150), (52, 150, 214), (92, 110, 210), (150, 92, 200),
            (206, 72, 168)]
@@ -195,7 +195,7 @@ EDGE_DARK = (24, 22, 40)
 
 
 def rainbow_text(text, height_px, red_fill=(), ss=4):
-    """Silver letters, each outlined in the next rainbow colour (red to
+    """Silver letters, each outlined in the next rainbow color (red to
     magenta), with a thin dark edge outside the outline so they read on a
     dark background; letters in red_fill are filled red (the 3 of N3DS)."""
     size = int(height_px * ss * 1.32)
@@ -283,7 +283,7 @@ def title_block(width, height, ss=2):
 
 
 # The wheel artwork (1024x1024): eight spokes and a rainbow ring on a
-# starry background. Measured: centre (512, 512), ring from radius 401 to
+# starry background. Measured: center (512, 512), ring from radius 401 to
 # 443.5 (outlines included), spokes 43 px wide, meeting in a light hub.
 WHEEL_ART = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          "wheel_art.jpg")
